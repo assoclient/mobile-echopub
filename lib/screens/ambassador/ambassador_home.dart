@@ -35,7 +35,7 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
   String _search = '';
 
   // Debug flag - Set to false to use real API, true for test data
-  static const bool is_debug = true;
+  static const bool is_debug = false;
 
   @override
   void initState() {

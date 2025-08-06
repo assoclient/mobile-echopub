@@ -112,11 +112,7 @@ class _MainScaffoldState extends State<MainScaffold> {
         currentIndex: _selectedIndex,
         onTap: (i) => setState(() => _selectedIndex = i),
         items: isAmbassador
-            ? const [
-                BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Accueil'),
-                BottomNavigationBarItem(icon: Icon(Icons.paid), label: 'Gains'),
-                BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profil'),
-              ]
+            ? const []
             : const [
                 BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Mes Annonces'),
                 BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Mon Compte'),
