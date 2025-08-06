@@ -61,6 +61,7 @@ class _LoginPageState extends State<LoginPage> {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Rôle non supporté.')));
         }
       } else {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const AdvertiserHome()));
         setState(() {
           _error = 'Email ou mot de passe incorrect';
         });

@@ -48,7 +48,12 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
         _publications[index]['capture$captureNum'] = picked.path;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Capture ${captureNum == 1 ? "initiale" : "18h"} enregistrée.')),
+        SnackBar(
+          content: Text('Capture ${captureNum == 1 ? "initiale" : "18h"} enregistrée.'),
+          backgroundColor: AppColors.primaryBlue,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
       );
     }
   }
@@ -65,15 +70,31 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
       builder: (context) {
         final controller = TextEditingController(text: _publications[index]['title']);
         return AlertDialog(
-          title: const Text('Modifier la publication'),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Modifier la publication', style: TextStyle(fontWeight: FontWeight.w600)),
           content: TextField(
             controller: controller,
-            decoration: const InputDecoration(labelText: 'Titre'),
+            decoration: InputDecoration(
+              labelText: 'Titre',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.primaryBlue, width: 2),
+              ),
+            ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annuler', style: TextStyle(color: Colors.grey)),
+            ),
             ElevatedButton(
               onPressed: () => Navigator.pop(context, controller.text),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryBlue,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
               child: const Text('Enregistrer'),
             ),
           ],
@@ -101,229 +122,353 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
     }).toList();
 
     return Scaffold(
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text('Mes publications', style: TextStyle(color: Colors.white)),
+        title: const Text(
+          'Mes publications',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+            fontSize: 20,
+          ),
+        ),
         backgroundColor: AppColors.primaryBlue,
+        elevation: 0,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+        ),
       ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+          Container(
+            margin: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
             child: Column(
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        decoration: InputDecoration(
-                          hintText: 'Rechercher par titre...',
-                          prefixIcon: const Icon(Icons.search, color: AppColors.primaryBlue),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: const BorderSide(color: AppColors.primaryBlue),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: const BorderSide(color: AppColors.primaryBlue, width: 2),
-                          ),
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                        ),
-                        style: const TextStyle(color: AppColors.primaryBlue, fontWeight: FontWeight.w500),
-                        cursorColor: AppColors.primaryBlue,
-                        onChanged: (v) => setState(() => _search = v),
-                      ),
+                // Search Bar
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: TextField(
+                    decoration: InputDecoration(
+                      hintText: 'Rechercher par titre...',
+                      hintStyle: TextStyle(color: Colors.grey[600]),
+                      prefixIcon: Icon(Icons.search, color: AppColors.primaryBlue, size: 20),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     ),
-                  ],
+                    style: const TextStyle(color: AppColors.primaryBlue, fontWeight: FontWeight.w500),
+                    cursorColor: AppColors.primaryBlue,
+                    onChanged: (v) => setState(() => _search = v),
+                  ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 16),
+                // Date Filters
                 Row(
                   children: [
                     Expanded(
-                      child: OutlinedButton.icon(
-                        icon: const Icon(Icons.date_range),
-                        label: Text(_dateStart == null ? 'Début' : '${_dateStart!.day}/${_dateStart!.month}/${_dateStart!.year}'),
-                        onPressed: () async {
-                          final picked = await showDatePicker(
-                            context: context,
-                            initialDate: _dateStart ?? DateTime.now(),
-                            firstDate: DateTime(2020),
-                            lastDate: DateTime.now().add(const Duration(days: 365)),
-                          );
-                          if (picked != null) setState(() => _dateStart = picked);
-                        },
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size(40, 40),
-                          foregroundColor: AppColors.primaryBlue,
-                          side: const BorderSide(color: AppColors.primaryBlue),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: AppColors.primaryBlue.withOpacity(0.3)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: OutlinedButton.icon(
+                          icon: Icon(Icons.date_range, size: 18, color: AppColors.primaryBlue),
+                          label: Text(
+                            _dateStart == null ? 'Début' : '${_dateStart!.day}/${_dateStart!.month}/${_dateStart!.year}',
+                            style: TextStyle(color: AppColors.primaryBlue, fontWeight: FontWeight.w500),
+                          ),
+                          onPressed: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: _dateStart ?? DateTime.now(),
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime.now().add(const Duration(days: 365)),
+                            );
+                            if (picked != null) setState(() => _dateStart = picked);
+                          },
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(40, 44),
+                            foregroundColor: AppColors.primaryBlue,
+                            side: BorderSide.none,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 12),
                     Expanded(
-                      child: OutlinedButton.icon(
-                        icon: const Icon(Icons.date_range),
-                        label: Text(_dateEnd == null ? 'Fin' : '${_dateEnd!.day}/${_dateEnd!.month}/${_dateEnd!.year}'),
-                        onPressed: () async {
-                          final picked = await showDatePicker(
-                            context: context,
-                            initialDate: _dateEnd ?? DateTime.now(),
-                            firstDate: DateTime(2020),
-                            lastDate: DateTime.now().add(const Duration(days: 365)),
-                          );
-                          if (picked != null) setState(() => _dateEnd = picked);
-                        },
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size(40, 40),
-                          foregroundColor: AppColors.primaryBlue,
-                          side: const BorderSide(color: AppColors.primaryBlue),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: AppColors.primaryBlue.withOpacity(0.3)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: OutlinedButton.icon(
+                          icon: Icon(Icons.date_range, size: 18, color: AppColors.primaryBlue),
+                          label: Text(
+                            _dateEnd == null ? 'Fin' : '${_dateEnd!.day}/${_dateEnd!.month}/${_dateEnd!.year}',
+                            style: TextStyle(color: AppColors.primaryBlue, fontWeight: FontWeight.w500),
+                          ),
+                          onPressed: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: _dateEnd ?? DateTime.now(),
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime.now().add(const Duration(days: 365)),
+                            );
+                            if (picked != null) setState(() => _dateEnd = picked);
+                          },
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(40, 44),
+                            foregroundColor: AppColors.primaryBlue,
+                            side: BorderSide.none,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
                         ),
                       ),
                     ),
                     if (_dateStart != null || _dateEnd != null)
-                      IconButton(
-                        icon: const Icon(Icons.clear),
-                        tooltip: 'Réinitialiser dates',
-                        color: AppColors.primaryBlue,
-                        onPressed: () => setState(() {
-                          _dateStart = null;
-                          _dateEnd = null;
-                        }),
+                      Container(
+                        margin: const EdgeInsets.only(left: 8),
+                        child: IconButton(
+                          icon: const Icon(Icons.clear, size: 20),
+                          tooltip: 'Réinitialiser dates',
+                          color: AppColors.primaryBlue,
+                          onPressed: () => setState(() {
+                            _dateStart = null;
+                            _dateEnd = null;
+                          }),
+                        ),
                       ),
                   ],
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 8),
           Expanded(
             child: filtered.isEmpty
-                ? const Center(child: Text('Aucune publication'))
-                : ListView.separated(
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.article_outlined,
+                          size: 64,
+                          color: Colors.grey[400],
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Aucune publication',
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
                     itemCount: filtered.length,
-                    separatorBuilder: (_, __) => const Divider(),
                     itemBuilder: (context, i) {
                       final pub = filtered[i];
-                      return Card(
-                        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
                         child: Padding(
-                          padding: const EdgeInsets.all(8.0),
+                          padding: const EdgeInsets.all(20),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(pub['title'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                              Wrap(
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                spacing: 8,
-                                runSpacing: 4,
+                              // Header with title and actions
+                              Row(
                                 children: [
-                                  Text('Date: ${pub['date'].day}/${pub['date'].month}/${pub['date'].year} - ${pub['status']}'),
+                                  Expanded(
+                                    child: Text(
+                                      pub['title'],
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 18,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                  ),
+                                  PopupMenuButton<String>(
+                                    icon: const Icon(Icons.more_vert, color: Colors.grey),
+                                    onSelected: (value) {
+                                      if (value == 'edit') {
+                                        _editPublication(_publications.indexOf(pub));
+                                      } else if (value == 'delete') {
+                                        _deletePublication(_publications.indexOf(pub));
+                                      }
+                                    },
+                                    itemBuilder: (context) => [
+                                      const PopupMenuItem(
+                                        value: 'edit',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.edit, color: Colors.orange, size: 20),
+                                            SizedBox(width: 8),
+                                            Text('Modifier'),
+                                          ],
+                                        ),
+                                      ),
+                                      const PopupMenuItem(
+                                        value: 'delete',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.delete, color: Colors.red, size: 20),
+                                            SizedBox(width: 8),
+                                            Text('Supprimer'),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              // Status and date
+                              Row(
+                                children: [
+                                  Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${pub['date'].day}/${pub['date'].month}/${pub['date'].year}',
+                                    style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                                  ),
+                                  const SizedBox(width: 16),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                     decoration: BoxDecoration(
                                       color: pub['validation'] == 'Validée'
-                                          ? Colors.green.shade100
+                                          ? Colors.green.shade50
                                           : pub['validation'] == 'Refusée'
-                                              ? Colors.red.shade100
-                                              : Colors.orange.shade100,
+                                              ? Colors.red.shade50
+                                              : Colors.orange.shade50,
                                       borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: pub['validation'] == 'Validée'
+                                            ? Colors.green.shade200
+                                            : pub['validation'] == 'Refusée'
+                                                ? Colors.red.shade200
+                                                : Colors.orange.shade200,
+                                      ),
                                     ),
                                     child: Text(
                                       pub['validation'] ?? 'En attente',
                                       style: TextStyle(
                                         color: pub['validation'] == 'Validée'
-                                            ? Colors.green.shade800
+                                            ? Colors.green.shade700
                                             : pub['validation'] == 'Refusée'
-                                                ? Colors.red.shade800
-                                                : Colors.orange.shade800,
-                                        fontWeight: FontWeight.bold,
+                                                ? Colors.red.shade700
+                                                : Colors.orange.shade700,
+                                        fontWeight: FontWeight.w600,
                                         fontSize: 12,
                                       ),
                                     ),
                                   ),
-                                  if (pub['validation'] == 'Validée') ...[
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Icon(Icons.remove_red_eye, size: 16, color: Colors.blueGrey),
-                                        const SizedBox(width: 2),
-                                        Text('${pub['views'] ?? 0}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                        const SizedBox(width: 8),
-                                        const Icon(Icons.monetization_on, size: 16, color: Colors.green),
-                                        const SizedBox(width: 2),
-                                        Text('${pub['gain'] ?? 0} FCFA', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
-                                      ],
-                                    ),
-                                  ],
                                 ],
                               ),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      children: [
-                                        pub['capture1'] != null
-                                            ? Column(
-                                                children: [
-                                                  Image.network(
-                                                    pub['capture1'],
-                                                    height: 80,
-                                                    fit: BoxFit.cover,
-                                                  ),
-                                                  TextButton.icon(
-                                                    onPressed: () => _pickCapture(_publications.indexOf(pub), 1),
-                                                    icon: const Icon(Icons.refresh),
-                                                    label: const Text('Remplacer preuve initiale'),
-                                                  ),
-                                                ],
-                                              )
-                                            : Column(
-                                                children: [
-                                                  const Text('Aucune preuve initiale'),
-                                                  TextButton.icon(
-                                                    onPressed: () => _pickCapture(_publications.indexOf(pub), 1),
-                                                    icon: const Icon(Icons.camera_alt),
-                                                    label: const Text('Ajouter preuve initiale'),
-                                                  ),
-                                                ],
+                              // Stats for validated publications
+                              if (pub['validation'] == 'Validée') ...[
+                                const SizedBox(height: 12),
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.shade50,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: Colors.blue.shade200),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.remove_red_eye, size: 18, color: Colors.blue.shade700),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              '${pub['views'] ?? 0} vues',
+                                              style: TextStyle(
+                                                color: Colors.blue.shade700,
+                                                fontWeight: FontWeight.w600,
                                               ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Column(
-                                      children: [
-                                        pub['capture2'] != null
-                                            ? Image.network(
-                                                pub['capture2'],
-                                                height: 80,
-                                                fit: BoxFit.cover,
-                                              )
-                                            : const Text('Aucune preuve 18h'),
-                                        TextButton.icon(
-                                          onPressed: () => _pickCapture(_publications.indexOf(pub), 2),
-                                          icon: const Icon(Icons.camera_alt_outlined),
-                                          label: const Text('Ajouter preuve 18h'),
+                                            ),
+                                          ],
                                         ),
-                                      ],
+                                      ),
+                                      Expanded(
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.monetization_on, size: 18, color: Colors.green.shade700),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              '${pub['gain'] ?? 0} FCFA',
+                                              style: TextStyle(
+                                                color: Colors.green.shade700,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 16),
+                              // Proof images section
+                              Text(
+                                'Preuves de publication',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                  color: Colors.grey[800],
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildProofSection(
+                                      title: 'Preuve initiale',
+                                      imageUrl: pub['capture1'],
+                                      onTap: () => _pickCapture(_publications.indexOf(pub), 1),
+                                      isInitial: true,
                                     ),
                                   ),
-                                ],
-                              ),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.edit, color: Colors.orange),
-                                    onPressed: () => _editPublication(_publications.indexOf(pub)),
-                                    tooltip: 'Modifier',
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete, color: Colors.red),
-                                    onPressed: () => _deletePublication(_publications.indexOf(pub)),
-                                    tooltip: 'Supprimer',
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: _buildProofSection(
+                                      title: 'Preuve 18h',
+                                      imageUrl: pub['capture2'],
+                                      onTap: () => _pickCapture(_publications.indexOf(pub), 2),
+                                      isInitial: false,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -339,6 +484,82 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
       bottomNavigationBar: AmbassadorBottomNav(
         currentIndex: 1,
         onTap: (index) => handleAmbassadorNav(context, 1, index),
+      ),
+    );
+  }
+
+  Widget _buildProofSection({
+    required String title,
+    required String? imageUrl,
+    required VoidCallback onTap,
+    required bool isInitial,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+              color: Colors.grey[700],
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (imageUrl != null)
+            Container(
+              height: 80,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                image: DecorationImage(
+                  image: NetworkImage(imageUrl),
+                  fit: BoxFit.cover,
+                ),
+              ),
+            )
+          else
+            Container(
+              height: 80,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.image_outlined,
+                color: Colors.grey[400],
+                size: 32,
+              ),
+            ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onTap,
+              icon: Icon(
+                imageUrl != null ? Icons.refresh : Icons.camera_alt,
+                size: 16,
+              ),
+              label: Text(
+                imageUrl != null ? 'Remplacer' : 'Ajouter',
+                style: const TextStyle(fontSize: 12),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primaryBlue,
+                side: BorderSide(color: AppColors.primaryBlue.withOpacity(0.5)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -34,10 +34,13 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
   int _bottomNavIndex = 0;
   String _search = '';
 
+  // Debug flag - Set to false to use real API, true for test data
+  static const bool is_debug = true;
+
   @override
   void initState() {
     super.initState();
-    _fetchCampaigns();
+    _loadCampaigns();
   }
 
   @override
@@ -48,11 +51,117 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
     super.dispose();
   }
 
-  Future<void> _fetchCampaigns() async {
+  Future<void> _loadCampaigns() async {
     setState(() {
       _isLoading = true;
       _error = null;
     });
+
+    if (is_debug) {
+      await _loadDefaultCampaigns();
+    } else {
+      await _fetchCampaignsFromAPI();
+    }
+  }
+
+  Future<void> _loadDefaultCampaigns() async {
+    // Simulate loading delay
+    await Future.delayed(const Duration(seconds: 1));
+    
+    // Default sample data
+    final defaultCampaigns = [
+      {
+        'id': '1',
+        'title': 'Campagne Pizza Hut - Nouveau Menu',
+        'description': 'Découvrez notre nouveau menu avec des pizzas exclusives. Partagez cette offre et gagnez de l\'argent !',
+        'media_url': 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=400&q=80',
+        'target_link': 'https://pizzahut.com/nouveau-menu',
+        'expected_views': 500,
+        'expected_earnings': 2500,
+        'cpv': 5.0,
+        'start_date': DateTime.now().subtract(const Duration(days: 5)),
+        'end_date': DateTime.now().add(const Duration(days: 10)),
+        'location_type': 'city',
+        'target_location': [
+          {'value': 'Abidjan'},
+          {'value': 'Yamoussoukro'}
+        ],
+        'advertiser': {
+          'name': 'Pizza Hut Côte d\'Ivoire',
+          'logo': 'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=crop&w=400&q=80'
+        }
+      },
+      {
+        'id': '2',
+        'title': 'Offre Orange Money - Transfert Gratuit',
+        'description': 'Envoyez de l\'argent gratuitement avec Orange Money. Partagez cette offre et gagnez des commissions !',
+        'media_url': 'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=crop&w=400&q=80',
+        'target_link': 'https://orange-money.ci/transfert-gratuit',
+        'expected_views': 300,
+        'expected_earnings': 1500,
+        'cpv': 5.0,
+        'start_date': DateTime.now().subtract(const Duration(days: 3)),
+        'end_date': DateTime.now().add(const Duration(days: 7)),
+        'location_type': 'city',
+        'target_location': [
+          {'value': 'Abidjan'},
+          {'value': 'Bouaké'}
+        ],
+        'advertiser': {
+          'name': 'Orange Money',
+          'logo': 'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=crop&w=400&q=80'
+        }
+      },
+      {
+        'id': '3',
+        'title': 'Promotion MTN - Forfaits 4G',
+        'description': 'Découvrez nos nouveaux forfaits 4G illimités. Partagez et gagnez de l\'argent !',
+        'media_url': 'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=crop&w=400&q=80',
+        'target_link': 'https://mtn.ci/forfaits-4g',
+        'expected_views': 400,
+        'expected_earnings': 2000,
+        'cpv': 5.0,
+        'start_date': DateTime.now().subtract(const Duration(days: 1)),
+        'end_date': DateTime.now().add(const Duration(days: 15)),
+        'location_type': 'city',
+        'target_location': [
+          {'value': 'Abidjan'},
+          {'value': 'San-Pédro'}
+        ],
+        'advertiser': {
+          'name': 'MTN Côte d\'Ivoire',
+          'logo': 'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=crop&w=400&q=80'
+        }
+      },
+      {
+        'id': '4',
+        'title': 'Nouveau Restaurant - Saveurs Locales',
+        'description': 'Découvrez notre restaurant avec des saveurs locales authentiques. Partagez et gagnez !',
+        'media_url': 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=400&q=80',
+        'target_link': 'https://saveurs-locales.ci',
+        'expected_views': 200,
+        'expected_earnings': 1000,
+        'cpv': 5.0,
+        'start_date': DateTime.now().subtract(const Duration(days: 2)),
+        'end_date': DateTime.now().add(const Duration(days: 20)),
+        'location_type': 'city',
+        'target_location': [
+          {'value': 'Abidjan'}
+        ],
+        'advertiser': {
+          'name': 'Saveurs Locales',
+          'logo': 'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=crop&w=400&q=80'
+        }
+      }
+    ];
+
+    setState(() {
+      _isLoading = false;
+      _campaigns = defaultCampaigns;
+    });
+  }
+
+  Future<void> _fetchCampaignsFromAPI() async {
     try {
       // Récupérer l'ID ambassadeur et le token
       final storage = const FlutterSecureStorage();
@@ -114,9 +223,42 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
   Widget build(BuildContext context) {
     Widget bodyWidget;
     if (_isLoading) {
-      bodyWidget = const Center(child: CircularProgressIndicator(color: AppColors.primaryBlue));
+      bodyWidget = Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(color: AppColors.primaryBlue),
+            const SizedBox(height: 16),
+            Text(
+              'Chargement des campagnes...',
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+      );
     } else if (_error != null) {
-      bodyWidget = Center(child: Text(_error!, style: const TextStyle(color: Colors.red)));
+      bodyWidget = Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
+            const SizedBox(height: 16),
+            Text(
+              _error!,
+              style: const TextStyle(color: Colors.red, fontSize: 16),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _loadCampaigns,
+              child: const Text('Réessayer'),
+            ),
+          ],
+        ),
+      );
     } else {
       final filteredCampaigns = _campaigns.where((c) {
         final query = _search.trim().toLowerCase();
@@ -126,36 +268,60 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
       }).toList();
       bodyWidget = Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(10, 12, 10, 0),
+          // Search Bar
+          Container(
+            margin: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
             child: TextField(
               decoration: InputDecoration(
                 hintText: 'Rechercher une campagne...',
-                prefixIcon: const Icon(Icons.search, color: AppColors.primaryBlue),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(23),
-                  borderSide: const BorderSide(color: AppColors.primaryBlue),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(23),
-                  borderSide: const BorderSide(color: AppColors.primaryBlue, width: 2),
-                ),
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 0),
+                hintStyle: TextStyle(color: Colors.grey[600]),
+                prefixIcon: Icon(Icons.search, color: AppColors.primaryBlue, size: 20),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 12),
               ),
-              style: const TextStyle(color: AppColors.primaryBlue,),
+              style: const TextStyle(color: AppColors.primaryBlue, fontWeight: FontWeight.w500),
               cursorColor: AppColors.primaryBlue,
               onChanged: (v) => setState(() => _search = v),
             ),
           ),
-          const SizedBox(height: 8),
           Expanded(
             child: filteredCampaigns.isEmpty
-                ? const Center(child: Text('Aucune campagne trouvée'))
-                : ListView.separated(
-                    padding: const EdgeInsets.all(0),
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.campaign_outlined,
+                          size: 64,
+                          color: Colors.grey[400],
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Aucune campagne trouvée',
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
                     itemCount: filteredCampaigns.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 16),
                     itemBuilder: (context, i) {
                       final c = filteredCampaigns[i];
                       final locationType = c['location_type'];
@@ -163,82 +329,99 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
                       final cpv = c['cpv'];
                       final cpc = c['cpc'];
                       final endDate = c['end_date'] is DateTime ? c['end_date'] : null;
-                      return Card(
-                        elevation: 0,
-                        color: AppColors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(0)),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(0),
-                          onTap: () {
-                            // TODO: Naviguer vers le détail ou accepter la campagne
-                          },
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              // Ici, le contenu de la carte campagne reste inchangé
-                              if (c['media_url'] != null && c['media_url'].toString().isNotEmpty)
-                                c['media_url'].toString().endsWith('.mp4')
-                                    ? FutureBuilder<VideoPlayerController>(
-                                        future: _getVideoController(i, c['media_url']),
-                                        builder: (context, snapshot) {
-                                          if (snapshot.connectionState == ConnectionState.done && snapshot.hasData) {
-                                            final controller = snapshot.data!;
-                                            return ClipRRect(
-                                              borderRadius: const BorderRadius.vertical(top: Radius.circular(0)),
-                                              child: AspectRatio(
-                                                aspectRatio: controller.value.aspectRatio > 0 ? controller.value.aspectRatio : 16 / 9,
-                                                child: Stack(
-                                                  alignment: Alignment.center,
-                                                  children: [
-                                                    VideoPlayer(controller),
-                                                    if (!controller.value.isPlaying)
-                                                      Positioned.fill(
-                                                        child: Container(
-                                                          color: Colors.black26,
-                                                          child: Center(
-                                                            child: IconButton(
-                                                              icon: const Icon(Icons.play_circle, size: 48, color: Colors.white),
-                                                              onPressed: () {
-                                                                controller.play();
-                                                                setState(() {});
-                                                              },
-                                                            ),
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            // Media Section
+                            if (c['media_url'] != null && c['media_url'].toString().isNotEmpty)
+                              c['media_url'].toString().endsWith('.mp4')
+                                  ? FutureBuilder<VideoPlayerController>(
+                                      future: _getVideoController(i, c['media_url']),
+                                      builder: (context, snapshot) {
+                                        if (snapshot.connectionState == ConnectionState.done && snapshot.hasData) {
+                                          final controller = snapshot.data!;
+                                          return ClipRRect(
+                                            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                                            child: AspectRatio(
+                                              aspectRatio: controller.value.aspectRatio > 0 ? controller.value.aspectRatio : 16 / 9,
+                                              child: Stack(
+                                                alignment: Alignment.center,
+                                                children: [
+                                                  VideoPlayer(controller),
+                                                  if (!controller.value.isPlaying)
+                                                    Positioned.fill(
+                                                      child: Container(
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.black.withOpacity(0.3),
+                                                          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                                                        ),
+                                                        child: Center(
+                                                          child: IconButton(
+                                                            icon: const Icon(Icons.play_circle, size: 64, color: Colors.white),
+                                                            onPressed: () {
+                                                              controller.play();
+                                                              setState(() {});
+                                                            },
                                                           ),
                                                         ),
                                                       ),
-                                                  ],
-                                                ),
-                                              ),
-                                            );
-                                          } else {
-                                            return Container(
-                                              height: 160,
-                                              color: Colors.black12,
-                                              child: const Center(child: CircularProgressIndicator()),
-                                            );
-                                          }
-                                        },
-                                      )
-                                    : c['media_url'].toString().startsWith('http')
-                                        ? ClipRRect(
-                                            borderRadius: const BorderRadius.vertical(top: Radius.circular(0)),
-                                            child: Image.network(
-                                              c['media_url'],
-                                              height: 160,
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (_, __, ___) => Container(
-                                                height: 160,
-                                                color: Colors.grey.shade200,
-                                                child: const Icon(Icons.image, size: 48, color: Colors.grey),
+                                                    ),
+                                                ],
                                               ),
                                             ),
-                                          )
-                                        : Container(
-                                            height: 100,
-                                            alignment: Alignment.center,
-                                            color: Colors.grey.shade100,
+                                          );
+                                        } else {
+                                          return Container(
+                                            height: 200,
+                                            decoration: BoxDecoration(
+                                              color: Colors.grey[200],
+                                              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                                            ),
+                                            child: const Center(child: CircularProgressIndicator()),
+                                          );
+                                        }
+                                      },
+                                    )
+                                  : c['media_url'].toString().startsWith('http')
+                                      ? ClipRRect(
+                                          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                                          child: Image.network(
+                                            c['media_url'],
+                                            height: 200,
+                                            width: double.infinity,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) => Container(
+                                              height: 200,
+                                              decoration: BoxDecoration(
+                                                color: Colors.grey[200],
+                                                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                                              ),
+                                              child: Icon(Icons.image, size: 48, color: Colors.grey[400]),
+                                            ),
+                                          ),
+                                        )
+                                      : Container(
+                                          height: 120,
+                                          decoration: BoxDecoration(
+                                            color: Colors.grey[100],
+                                            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                                          ),
+                                          child: Center(
                                             child: Padding(
-                                              padding: const EdgeInsets.all(12.0),
+                                              padding: const EdgeInsets.all(16.0),
                                               child: Text(
                                                 c['media_url'],
                                                 style: Theme.of(context).textTheme.bodyLarge,
@@ -246,38 +429,76 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
                                               ),
                                             ),
                                           ),
-                              Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        CircleAvatar(
-                                          radius: 16,
-                                          backgroundColor: Colors.transparent,
-                                          child: ClipOval(
-                                            child: Icon(Icons.person, size: 24, color: Colors.grey),
+                                        ),
+                            // Content Section
+                            Padding(
+                              padding: const EdgeInsets.all(20),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Advertiser Info
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.primaryBlue.withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Icon(
+                                          Icons.business,
+                                          size: 20,
+                                          color: AppColors.primaryBlue,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          c['advertiser']['name'] ?? '',
+                                          style: TextStyle(
+                                            color: AppColors.primaryBlue,
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 16,
                                           ),
                                         ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          c['advertiser']['name'] ?? '',
-                                          style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.primaryBlue, fontWeight: FontWeight.bold),
-                                        ),
-                                      ],
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  // Title
+                                  Text(
+                                    c['title'] ?? '',
+                                    style: const TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black87,
                                     ),
-                                    const SizedBox(height: 8),
-                                    Text(c['title'] ?? '', style: Theme.of(context).textTheme.titleLarge?.copyWith(color: AppColors.primaryBlue, fontWeight: FontWeight.bold)),
-                                    const SizedBox(height: 8),
-                                    Text(c['description'] ?? '', style: Theme.of(context).textTheme.bodyMedium),
-                                    const SizedBox(height: 8),
-                                    if (c['target_link'] != null)
-                                      Row(
+                                  ),
+                                  const SizedBox(height: 8),
+                                  // Description
+                                  Text(
+                                    c['description'] ?? '',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey[700],
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  // Target Link
+                                  if (c['target_link'] != null)
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.blue.shade50,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: Colors.blue.shade200),
+                                      ),
+                                      child: Row(
                                         children: [
-                                          const Icon(Icons.link, size: 18, color: Colors.blueGrey),
-                                          const SizedBox(width: 4),
-                                          Flexible(
+                                          Icon(Icons.link, size: 16, color: Colors.blue.shade700),
+                                          const SizedBox(width: 8),
+                                          Expanded(
                                             child: GestureDetector(
                                               onTap: () async {
                                                 final url = c['target_link'];
@@ -287,80 +508,152 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
                                               },
                                               child: Text(
                                                 c['target_link'],
-                                                style: const TextStyle(color: Colors.blue, decoration: TextDecoration.underline),
+                                                style: TextStyle(
+                                                  color: Colors.blue.shade700,
+                                                  decoration: TextDecoration.underline,
+                                                  fontSize: 12,
+                                                ),
                                                 overflow: TextOverflow.ellipsis,
                                               ),
                                             ),
                                           ),
                                         ],
                                       ),
-                                    const SizedBox(height: 8),
-                                    Wrap(
-                                      spacing: 8,
-                                      runSpacing: 8,
-                                      children: [
-                                        if (cpv != null)
-                                          Wrap(
-                                            children: [
-                                              Icon(Icons.monetization_on, size: 20, color: Colors.green.shade700),
-                                              Text('Objectif: ${c['expected_views'].toString()} vues', style: const TextStyle(color: Colors.green,fontSize: 16)),
-                                              SizedBox(width: 8),
-                                              Icon(Icons.attach_money, size: 20, color: Colors.orange.shade700),
-                                              Text('A gagner: ${c['expected_earnings'].toString()} FCFA', style: const TextStyle(color: Colors.orange,fontSize: 16)),],
-                                          ),
-                                        if (cpc != null)
-                                          Row(
-                                            children: [
-                                              
-                                              ],
-                                          ),
-                                        if (locationType != null && locationValue != null && locationType == 'city')
-                                          Wrap(
-                                            children: [
-                                              Icon(Icons.location_city, size: 18, color: Colors.blueGrey),
-                                              Text('Ville: $locationValue', style: const TextStyle(color: Colors.black))],
-                                            
-                                          ),
-                                      ],
                                     ),
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      children: [
-                                        if (endDate != null)
-                                          Row(
+                                  const SizedBox(height: 16),
+                                  // Stats Row
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Container(
+                                          padding: const EdgeInsets.all(12),
+                                          decoration: BoxDecoration(
+                                            color: Colors.green.shade50,
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(color: Colors.green.shade200),
+                                          ),
+                                          child: Column(
                                             children: [
-                                              const Icon(Icons.timer, size: 16, color: Colors.grey),
-                                              const SizedBox(width: 4),
+                                              Icon(Icons.remove_red_eye, size: 20, color: Colors.green.shade700),
+                                              const SizedBox(height: 4),
                                               Text(
-                                                () {
-                                                  final now = DateTime.now();
-                                                  final diff = endDate.difference(now).inDays;
-                                                  if (diff < 0) return 'Campagne terminée';
-                                                  if (diff == 0) return 'Dernier jour';
-                                                  if (diff == 1) return '1 jour restant';
-                                                  return '$diff jours restants';
-                                                }(),
-                                                style: Theme.of(context).textTheme.bodySmall,
+                                                '${c['expected_views']} vues',
+                                                style: TextStyle(
+                                                  color: Colors.green.shade700,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 14,
+                                                ),
                                               ),
                                             ],
                                           ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Container(
+                                          padding: const EdgeInsets.all(12),
+                                          decoration: BoxDecoration(
+                                            color: Colors.orange.shade50,
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(color: Colors.orange.shade200),
+                                          ),
+                                          child: Column(
+                                            children: [
+                                              Icon(Icons.monetization_on, size: 20, color: Colors.orange.shade700),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                '${c['expected_earnings']} FCFA',
+                                                style: TextStyle(
+                                                  color: Colors.orange.shade700,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  // Location and Time
+                                  Row(
+                                    children: [
+                                      if (locationType != null && locationValue != null && locationType == 'city')
+                                        Expanded(
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: Colors.blue.shade50,
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(Icons.location_city, size: 14, color: Colors.blue.shade700),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  locationValue,
+                                                  style: TextStyle(
+                                                    color: Colors.blue.shade700,
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      if (endDate != null) ...[
+                                        if (locationType != null && locationValue != null) const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: Colors.grey.shade100,
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(Icons.timer, size: 14, color: Colors.grey.shade700),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  () {
+                                                    final now = DateTime.now();
+                                                    final diff = endDate.difference(now).inDays;
+                                                    if (diff < 0) return 'Terminée';
+                                                    if (diff == 0) return 'Dernier jour';
+                                                    if (diff == 1) return '1 jour';
+                                                    return '$diff jours';
+                                                  }(),
+                                                  style: TextStyle(
+                                                    color: Colors.grey.shade700,
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
                                       ],
-                                    ),
-                                  ],
-                                ),
+                                    ],
+                                  ),
+                                ],
                               ),
-                              Container(
-                                decoration: BoxDecoration(
-                                  color: AppColors.lightGrey,
-                                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
-                                ),
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    
-                                    
-                                    ElevatedButton.icon(
+                            ),
+                            // Action Buttons
+                            Container(
+                              padding: const EdgeInsets.all(20),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[50],
+                                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton.icon(
                                       onPressed: () async {
                                         final picker = ImagePicker();
                                         final picked = await picker.pickImage(source: ImageSource.gallery);
@@ -369,7 +662,12 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
                                             _pendingProof = File(picked.path);
                                           });
                                           ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(content: Text('Capture enregistrée. Elle sera envoyée au serveur plus tard.')),
+                                            SnackBar(
+                                              content: const Text('Capture enregistrée. Elle sera envoyée au serveur plus tard.'),
+                                              backgroundColor: AppColors.primaryBlue,
+                                              behavior: SnackBarBehavior.floating,
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                            ),
                                           );
                                         } else {
                                           ScaffoldMessenger.of(context).showSnackBar(
@@ -377,16 +675,21 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
                                           );
                                         }
                                       },
-                                      icon: const Icon(Icons.upload_file, color: Colors.white),
-                                      label: const Text('Preuve', style: TextStyle(color: Colors.white)),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: AppColors.lightBlue,
+                                      icon: const Icon(Icons.upload_file, size: 18),
+                                      label: const Text('Preuve'),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: AppColors.primaryBlue,
+                                        side: BorderSide(color: AppColors.primaryBlue.withOpacity(0.5)),
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                        padding: const EdgeInsets.symmetric(vertical: 12),
                                       ),
                                     ),
-                                    ElevatedButton.icon(
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: ElevatedButton.icon(
                                       onPressed: () async {
-                                        final title = c['description'] ?? '';
+                                        final title = c['title'] ?? '';
                                         final description = c['description'] ?? '';
                                         final mediaUrl = c['media_url'] ?? '';
                                         final link = c['target_link'] ?? '';
@@ -427,18 +730,21 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
                                           await Share.share(content, subject: title);
                                         }
                                       },
-                                      icon: const Icon(Icons.campaign, color: Colors.white),
-                                      label: const Text('Partager',style: TextStyle(color: Colors.white),),
+                                      icon: const Icon(Icons.share, size: 18),
+                                      label: const Text('Partager'),
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: AppColors.primaryBlue,
+                                        foregroundColor: Colors.white,
+                                        elevation: 0,
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                        padding: const EdgeInsets.symmetric(vertical: 12),
                                       ),
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       );
                     },
@@ -449,15 +755,26 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
     }
 
     return Scaffold(
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text('Campagnes pour vous ',style: TextStyle(color: Colors.white,fontWeight: FontWeight.bold),),
+        title: const Text(
+          'Campagnes pour vous',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+            fontSize: 20,
+          ),
+        ),
         backgroundColor: AppColors.primaryBlue,
+        elevation: 0,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _fetchCampaigns,
+            icon: const Icon(Icons.refresh, color: Colors.white),
+            onPressed: _loadCampaigns,
             tooltip: 'Rafraîchir',
-            color: AppColors.primaryBlue,
           ),
         ],
       ),

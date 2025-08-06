@@ -763,5 +763,5 @@ extension _AdvertiserHomeStateSubmitAd on _AdvertiserHomeState {
     }
   }
 
-}
-  
+}  
+
