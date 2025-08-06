@@ -133,17 +133,17 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
                 hintText: 'Rechercher une campagne...',
                 prefixIcon: const Icon(Icons.search, color: AppColors.primaryBlue),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(23),
                   borderSide: const BorderSide(color: AppColors.primaryBlue),
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(23),
                   borderSide: const BorderSide(color: AppColors.primaryBlue, width: 2),
                 ),
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 0),
               ),
-              style: const TextStyle(color: AppColors.primaryBlue, fontWeight: FontWeight.w500),
+              style: const TextStyle(color: AppColors.primaryBlue,),
               cursorColor: AppColors.primaryBlue,
               onChanged: (v) => setState(() => _search = v),
             ),
@@ -300,19 +300,26 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
                                       runSpacing: 8,
                                       children: [
                                         if (cpv != null)
-                                          Chip(
-                                            label: Text('CPV: ${cpv.toString()} FCFA', style: const TextStyle(color: Colors.white)),
-                                            backgroundColor: Colors.green.shade700,
+                                          Wrap(
+                                            children: [
+                                              Icon(Icons.monetization_on, size: 20, color: Colors.green.shade700),
+                                              Text('Objectif: ${c['expected_views'].toString()} vues', style: const TextStyle(color: Colors.green,fontSize: 16)),
+                                              SizedBox(width: 8),
+                                              Icon(Icons.attach_money, size: 20, color: Colors.orange.shade700),
+                                              Text('A gagner: ${c['expected_earnings'].toString()} FCFA', style: const TextStyle(color: Colors.orange,fontSize: 16)),],
                                           ),
                                         if (cpc != null)
-                                          Chip(
-                                            label: Text('CPC: ${cpc.toString()} FCFA', style: const TextStyle(color: Colors.white)),
-                                            backgroundColor: Colors.orange.shade700,
+                                          Row(
+                                            children: [
+                                              
+                                              ],
                                           ),
                                         if (locationType != null && locationValue != null && locationType == 'city')
-                                          Chip(
-                                            label: Text('Ville: $locationValue', style: const TextStyle(color: Colors.white)),
-                                            backgroundColor: AppColors.darkGrey,
+                                          Wrap(
+                                            children: [
+                                              Icon(Icons.location_city, size: 18, color: Colors.blueGrey),
+                                              Text('Ville: $locationValue', style: const TextStyle(color: Colors.black))],
+                                            
                                           ),
                                       ],
                                     ),
@@ -349,8 +356,34 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
                                 ),
                                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                                 child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
+                                    
+                                    
+                                    ElevatedButton.icon(
+                                      onPressed: () async {
+                                        final picker = ImagePicker();
+                                        final picked = await picker.pickImage(source: ImageSource.gallery);
+                                        if (picked != null) {
+                                          setState(() {
+                                            _pendingProof = File(picked.path);
+                                          });
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(content: Text('Capture enregistrée. Elle sera envoyée au serveur plus tard.')),
+                                          );
+                                        } else {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(content: Text('Aucune capture prise.')),
+                                          );
+                                        }
+                                      },
+                                      icon: const Icon(Icons.upload_file, color: Colors.white),
+                                      label: const Text('Preuve', style: TextStyle(color: Colors.white)),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppColors.lightBlue,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      ),
+                                    ),
                                     ElevatedButton.icon(
                                       onPressed: () async {
                                         final title = c['description'] ?? '';
@@ -401,31 +434,6 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
-                                    ElevatedButton.icon(
-                                      onPressed: () async {
-                                        final picker = ImagePicker();
-                                        final picked = await picker.pickImage(source: ImageSource.gallery);
-                                        if (picked != null) {
-                                          setState(() {
-                                            _pendingProof = File(picked.path);
-                                          });
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(content: Text('Capture enregistrée. Elle sera envoyée au serveur plus tard.')),
-                                          );
-                                        } else {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(content: Text('Aucune capture prise.')),
-                                          );
-                                        }
-                                      },
-                                      icon: const Icon(Icons.upload_file, color: Colors.white),
-                                      label: const Text('Preuve', style: TextStyle(color: Colors.white)),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: AppColors.lightBlue,
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                      ),
-                                    ),
                                   ],
                                 ),
                               ),
@@ -442,7 +450,7 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Campagnes pour vous ',style: TextStyle(color: Colors.white),),
+        title: const Text('Campagnes pour vous ',style: TextStyle(color: Colors.white,fontWeight: FontWeight.bold),),
         backgroundColor: AppColors.primaryBlue,
         actions: [
           IconButton(
