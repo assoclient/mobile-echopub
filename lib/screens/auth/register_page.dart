@@ -8,6 +8,7 @@ import 'package:intl_phone_field/intl_phone_field.dart';
 import '../../theme.dart';
 import '../../utils/country_dial_codes.dart';
 import '../../services/auth_service.dart';
+import 'audience_collection_page.dart';
 
 class RegisterPage extends StatefulWidget {
   final VoidCallback? onLoginTap;
@@ -26,8 +27,8 @@ class _RegisterPageState extends State<RegisterPage> {
       _isLoading = true;
       _apiError = null;
     });
-    final url = Uri.parse('${dotenv.env['API_BASE_URL'] ?? 'http://localhost:5000'}/api/auth/register');
-    final Map<String, dynamic> data = {
+    
+    final registrationData = {
       'name': _name,
       'email': _email,
       'password': _password,
@@ -43,14 +44,46 @@ class _RegisterPageState extends State<RegisterPage> {
             'lat': _role == 'ambassador' ? _lat: null,
             'lng': _role == 'ambassador' ? _lng : null
           }
-  },
+      },
     };
+
+    // Si c'est un ambassadeur, naviguer vers la page de collecte d'audience
+    if (_role == 'ambassador') {
+      final result = await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => AudienceCollectionPage(
+            userCity: _cityController.text,
+            userAgeRange: _ageRange,
+            userGender: _gender,
+            registrationData: registrationData,
+          ),
+        ),
+      );
+      
+      if (result != null) {
+        // Procéder à l'inscription avec les données d'audience
+        await _performRegistration(result);
+      } else {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    } else {
+      // Pour les annonceurs, procéder directement à l'inscription
+      await _performRegistration(registrationData);
+    }
+  }
+
+  Future<void> _performRegistration(Map<String, dynamic> data) async {
+    final url = Uri.parse('${dotenv.env['API_BASE_URL'] ?? 'http://localhost:5000'}/api/auth/register');
+    
     try {
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(data),
       );
+      
       if (response.statusCode == 200 || response.statusCode == 201) {
         // Succès : login automatique (stockage du token possible ici)
         final resp = jsonDecode(response.body);
@@ -82,9 +115,12 @@ class _RegisterPageState extends State<RegisterPage> {
       });
     }
   }
+
   final _formKey = GlobalKey<FormState>();
   String? _name, _email, _password;
   String _role = 'ambassador';
+  String _ageRange = '18-25';
+  String _gender = 'M';
 
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _whatsappController = TextEditingController();
@@ -264,6 +300,47 @@ class _RegisterPageState extends State<RegisterPage> {
                         prefixIcon: Icon(Icons.people, color: AppColors.primaryBlue),
                       ),
                     ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      value: _ageRange,
+                      decoration: InputDecoration(
+                        labelText: 'Tranche d\'âge',
+                        prefixIcon: Icon(Icons.calendar_today, color: AppColors.primaryBlue),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: '18-25', child: Text('18-25 ans')),
+                        DropdownMenuItem(value: '26-35', child: Text('26-35 ans')),
+                        DropdownMenuItem(value: '36-45', child: Text('36-45 ans')),
+                        DropdownMenuItem(value: '46-55', child: Text('46-55 ans')),
+                        DropdownMenuItem(value: '56+', child: Text('56+ ans')),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() {
+                            _ageRange = value;
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      value: _gender,
+                      decoration: InputDecoration(
+                        labelText: 'Genre',
+                        prefixIcon: Icon(Icons.person_outline, color: AppColors.primaryBlue),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'M', child: Text('Masculin')),
+                        DropdownMenuItem(value: 'F', child: Text('Féminin')),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() {
+                            _gender = value;
+                          });
+                        }
+                      },
+                    ),
                     // GPS optionnel (à brancher sur une vraie géoloc si besoin)
                    // const SizedBox(height: 16),
                     Row(
@@ -306,7 +383,7 @@ class _RegisterPageState extends State<RegisterPage> {
                               height: 24,
                               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                             )
-                          : const Text('Créer un compte'),
+                          : const Text('Continuer >>'),
                     ),
                   ),
                   if (_apiError != null)

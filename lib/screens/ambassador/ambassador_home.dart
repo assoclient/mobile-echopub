@@ -37,6 +37,10 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
   // Debug flag - Set to false to use real API, true for test data
   static const bool is_debug = false;
 
+  // Base URL for API
+  static const String baseUrl = 'http://10.0.2.2:5000/api'; // For Android emulator
+  // static const String baseUrl = 'http://localhost:5000/api'; // For iOS simulator
+
   @override
   void initState() {
     super.initState();
@@ -49,6 +53,72 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
       controller.dispose();
     }
     super.dispose();
+  }
+
+  // Function to upload screenshot proof
+  Future<void> _uploadScreenshotProof(String campaignId, File imageFile) async {
+    try {
+      debugPrint('Uploading screenshot proof for campaign: $campaignId');
+      // Get auth token
+      final token = await AuthService.getToken();
+      if (token == null) {
+        throw Exception('Token d\'authentification non trouvé');
+      }
+
+      // Create multipart request
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/upload/screenshot/$campaignId'),
+      );
+
+      // Add authorization header
+      request.headers['Authorization'] = 'Bearer $token';
+
+      // Add file
+      final stream = http.ByteStream(imageFile.openRead());
+      final length = await imageFile.length();
+      final multipartFile = http.MultipartFile(
+        'file',
+        stream,
+        length,
+        filename: 'screenshot_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      );
+      request.files.add(multipartFile);
+
+      // Send request
+      final response = await request.send();
+      final responseBody = await response.stream.bytesToString();
+      final responseData = jsonDecode(responseBody);
+      print(responseData);
+      if (response.statusCode == 201) {
+        // Success
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(responseData['message'] ?? 'Preuve uploadée avec succès'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        );
+        
+        // Clear pending proof
+        setState(() {
+          _pendingProof = null;
+        });
+      } else {
+        // Error
+        throw Exception(responseData['message'] ?? 'Erreur lors de l\'upload');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erreur: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+    }
   }
 
   Future<void> _loadCampaigns() async {
@@ -171,7 +241,7 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
       final ambassadorId = user?['_id'];
       if (ambassadorId == null) throw Exception('Utilisateur non connecté');
       final apiUrl = dotenv.env['API_BASE_URL'] ?? 'http://localhost:5000';
-      final url = Uri.parse('$apiUrl/api/campaigns/active-campaigns/');
+      final url = Uri.parse('$apiUrl/api/ambassador-campaigns/active-campaigns/');
       final response = await http.get(url, headers: {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
@@ -658,17 +728,31 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
                                         final picker = ImagePicker();
                                         final picked = await picker.pickImage(source: ImageSource.gallery);
                                         if (picked != null) {
-                                          setState(() {
-                                            _pendingProof = File(picked.path);
-                                          });
+                                          final imageFile = File(picked.path);
+                                          
+                                          // Show loading indicator
                                           ScaffoldMessenger.of(context).showSnackBar(
                                             SnackBar(
-                                              content: const Text('Capture enregistrée. Elle sera envoyée au serveur plus tard.'),
+                                              content: const Row(
+                                                children: [
+                                                  SizedBox(
+                                                    width: 16,
+                                                    height: 16,
+                                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                                  ),
+                                                  SizedBox(width: 16),
+                                                  Text('Upload de la preuve en cours...'),
+                                                ],
+                                              ),
                                               backgroundColor: AppColors.primaryBlue,
                                               behavior: SnackBarBehavior.floating,
                                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                              duration: const Duration(seconds: 2),
                                             ),
                                           );
+                                          
+                                          // Upload the screenshot
+                                          await _uploadScreenshotProof(c['id'], imageFile);
                                         } else {
                                           ScaffoldMessenger.of(context).showSnackBar(
                                             const SnackBar(content: Text('Aucune capture prise.')),
