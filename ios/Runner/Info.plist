@@ -46,6 +46,6 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>NSContactsUsageDescription</key>
-	<string>Cette application a besoin d'accéder à vos contacts pour collecter les statistiques d'audience lors de l'inscription d'un ambassadeur.</string>
+	<string>Cette application a besoin d'accéder à vos contacts pour collecter les statistiques d'audience de votre réseau WhatsApp.</string>
 </dict>
 </plist>

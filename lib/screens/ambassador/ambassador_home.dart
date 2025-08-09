@@ -28,18 +28,17 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
   List<Map<String, dynamic>> _campaigns = [];
   final Map<int, VideoPlayerController> _videoControllers = {};
 
-  // Pour stocker la capture temporairement
-  File? _pendingProof;
+  // Supprimé _pendingProof car maintenant on upload directement
+
+  // États pour l'upload
+  final Map<String, bool> _uploadingProofs = {};
+  final Map<String, String?> _uploadErrors = {};
 
   int _bottomNavIndex = 0;
   String _search = '';
 
   // Debug flag - Set to false to use real API, true for test data
   static const bool is_debug = false;
-
-  // Base URL for API
-  static const String baseUrl = 'http://10.0.2.2:5000/api'; // For Android emulator
-  // static const String baseUrl = 'http://localhost:5000/api'; // For iOS simulator
 
   @override
   void initState() {
@@ -55,69 +54,87 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
     super.dispose();
   }
 
-  // Function to upload screenshot proof
-  Future<void> _uploadScreenshotProof(String campaignId, File imageFile) async {
+  Future<void> _uploadProof(String campaignId, File imageFile) async {
+    setState(() {
+      _uploadingProofs[campaignId] = true;
+      _uploadErrors[campaignId] = null;
+    });
+
     try {
-      debugPrint('Uploading screenshot proof for campaign: $campaignId');
-      // Get auth token
-      final token = await AuthService.getToken();
+      final storage = const FlutterSecureStorage();
+      final token = await storage.read(key: 'auth_token');
+      
       if (token == null) {
-        throw Exception('Token d\'authentification non trouvé');
+        throw Exception('Token d\'authentification manquant');
       }
 
-      // Create multipart request
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse('$baseUrl/upload/screenshot/$campaignId'),
-      );
+      final apiUrl = dotenv.env['API_BASE_URL'] ?? 'http://localhost:5000';
+      final uri = Uri.parse('$apiUrl/api/upload/screenshot/$campaignId');
 
-      // Add authorization header
+      var request = http.MultipartRequest('POST', uri);
       request.headers['Authorization'] = 'Bearer $token';
-
-      // Add file
-      final stream = http.ByteStream(imageFile.openRead());
-      final length = await imageFile.length();
-      final multipartFile = http.MultipartFile(
+      
+      // Ajouter le fichier
+      var multipartFile = await http.MultipartFile.fromPath(
         'file',
-        stream,
-        length,
-        filename: 'screenshot_${DateTime.now().millisecondsSinceEpoch}.jpg',
+        imageFile.path,
       );
       request.files.add(multipartFile);
 
-      // Send request
-      final response = await request.send();
-      final responseBody = await response.stream.bytesToString();
-      final responseData = jsonDecode(responseBody);
-      print(responseData);
-      if (response.statusCode == 201) {
-        // Success
+      // Envoyer la requête
+      var streamedResponse = await request.send();
+      var response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(responseData['message'] ?? 'Preuve uploadée avec succès'),
+            content: Text(responseData['message'] ?? 'Preuve uploadée avec succès !'),
             backgroundColor: Colors.green,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
         );
         
-        // Clear pending proof
-        setState(() {
-          _pendingProof = null;
-        });
+        // Recharger les campagnes pour mettre à jour les statuts
+        _loadCampaigns();
+        
       } else {
-        // Error
-        throw Exception(responseData['message'] ?? 'Erreur lors de l\'upload');
+        final errorData = jsonDecode(response.body);
+        final errorMessage = errorData['message'] ?? 'Erreur lors de l\'upload';
+        
+        setState(() {
+          _uploadErrors[campaignId] = errorMessage;
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        );
       }
     } catch (e) {
+      final errorMessage = 'Erreur de connexion: $e';
+      setState(() {
+        _uploadErrors[campaignId] = errorMessage;
+      });
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Erreur: ${e.toString()}'),
+          content: Text(errorMessage),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       );
+    } finally {
+      setState(() {
+        _uploadingProofs[campaignId] = false;
+      });
     }
   }
 
@@ -394,10 +411,10 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
                     itemCount: filteredCampaigns.length,
                     itemBuilder: (context, i) {
                       final c = filteredCampaigns[i];
+                      final campaignId = c['_id']?.toString() ?? '';
                       final locationType = c['location_type'];
                       final locationValue = c['target_location'].map((e) => e['value']).join(', ');
-                      final cpv = c['cpv'];
-                      final cpc = c['cpc'];
+                      // Supprimé cpv et cpc car non utilisés
                       final endDate = c['end_date'] is DateTime ? c['end_date'] : null;
                       return Container(
                         margin: const EdgeInsets.only(bottom: 16),
@@ -724,46 +741,106 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
                                 children: [
                                   Expanded(
                                     child: OutlinedButton.icon(
-                                      onPressed: () async {
+                                      onPressed: _uploadingProofs[campaignId] == true ? null : () async {
+                                        // Afficher un dialogue pour choisir la source
+                                        final source = await showDialog<ImageSource>(
+                                          context: context,
+                                          builder: (context) => AlertDialog(
+                                            title: const Text('Choisir une source'),
+                                            content: const Text('D\'où voulez-vous prendre la capture d\'écran ?'),
+                                            actions: [
+                                              TextButton.icon(
+                                                onPressed: () => Navigator.pop(context, ImageSource.camera),
+                                                icon: const Icon(Icons.camera_alt),
+                                                label: const Text('Appareil photo'),
+                                              ),
+                                              TextButton.icon(
+                                                onPressed: () => Navigator.pop(context, ImageSource.gallery),
+                                                icon: const Icon(Icons.photo_library),
+                                                label: const Text('Galerie'),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                        
+                                        if (source != null) {
                                         final picker = ImagePicker();
-                                        final picked = await picker.pickImage(source: ImageSource.gallery);
-                                        if (picked != null) {
-                                          final imageFile = File(picked.path);
+                                          final picked = await picker.pickImage(source: source);
                                           
-                                          // Show loading indicator
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(
-                                              content: const Row(
-                                                children: [
-                                                  SizedBox(
-                                                    width: 16,
-                                                    height: 16,
-                                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                        if (picked != null) {
+                                            final imageFile = File(picked.path);
+                                            // campaignId déjà défini plus haut
+                                            
+                                            // Confirmation avant upload
+                                            final confirm = await showDialog<bool>(
+                                              context: context,
+                                              builder: (context) => AlertDialog(
+                                                title: const Text('Confirmer l\'upload'),
+                                                content: Column(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    const Text('Voulez-vous envoyer cette preuve pour la campagne ?'),
+                                                    const SizedBox(height: 16),
+                                                    Container(
+                                                      height: 200,
+                                                      width: double.infinity,
+                                                      decoration: BoxDecoration(
+                                                        borderRadius: BorderRadius.circular(8),
+                                                        border: Border.all(color: Colors.grey.shade300),
+                                                      ),
+                                                      child: ClipRRect(
+                                                        borderRadius: BorderRadius.circular(8),
+                                                        child: Image.file(
+                                                          imageFile,
+                                                          fit: BoxFit.cover,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                actions: [
+                                                  TextButton(
+                                                    onPressed: () => Navigator.pop(context, false),
+                                                    child: const Text('Annuler'),
                                                   ),
-                                                  SizedBox(width: 16),
-                                                  Text('Upload de la preuve en cours...'),
+                                                  ElevatedButton(
+                                                    onPressed: () => Navigator.pop(context, true),
+                                                    style: ElevatedButton.styleFrom(
+                                              backgroundColor: AppColors.primaryBlue,
+                                                    ),
+                                                    child: const Text('Envoyer', style: TextStyle(color: Colors.white)),
+                                                  ),
                                                 ],
                                               ),
-                                              backgroundColor: AppColors.primaryBlue,
-                                              behavior: SnackBarBehavior.floating,
-                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                              duration: const Duration(seconds: 2),
-                                            ),
-                                          );
-                                          
-                                          // Upload the screenshot
-                                          await _uploadScreenshotProof(c['id'], imageFile);
+                                            );
+                                            
+                                            if (confirm == true) {
+                                              await _uploadProof(campaignId, imageFile);
+                                            }
                                         } else {
                                           ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(content: Text('Aucune capture prise.')),
-                                          );
+                                              const SnackBar(content: Text('Aucune image sélectionnée.')),
+                                            );
+                                          }
                                         }
                                       },
-                                      icon: const Icon(Icons.upload_file, size: 18),
-                                      label: const Text('Preuve'),
+                                      icon: _uploadingProofs[campaignId] == true 
+                                        ? const SizedBox(
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(strokeWidth: 2),
+                                          )
+                                        : const Icon(Icons.upload_file, size: 18),
+                                      label: Text(_uploadingProofs[campaignId] == true ? 'Envoi...' : 'Preuve'),
                                       style: OutlinedButton.styleFrom(
-                                        foregroundColor: AppColors.primaryBlue,
-                                        side: BorderSide(color: AppColors.primaryBlue.withOpacity(0.5)),
+                                        foregroundColor: _uploadingProofs[campaignId] == true 
+                                          ? Colors.grey 
+                                          : AppColors.primaryBlue,
+                                        side: BorderSide(
+                                          color: _uploadingProofs[campaignId] == true 
+                                            ? Colors.grey.withOpacity(0.5)
+                                            : AppColors.primaryBlue.withOpacity(0.5)
+                                        ),
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                         padding: const EdgeInsets.symmetric(vertical: 12),
                                       ),
@@ -828,6 +905,44 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
                                 ],
                               ),
                             ),
+                            // Afficher les erreurs d'upload s'il y en a
+                            if (_uploadErrors[campaignId] != null) 
+                              Container(
+                                margin: const EdgeInsets.only(left: 20, right: 20, bottom: 20),
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.shade50,
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: Colors.red.shade200),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.error_outline, 
+                                         color: Colors.red.shade700, size: 16),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        _uploadErrors[campaignId]!,
+                                        style: TextStyle(
+                                          color: Colors.red.shade700,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      onPressed: () {
+                                        setState(() {
+                                          _uploadErrors.remove(campaignId);
+                                        });
+                                      },
+                                      icon: Icon(Icons.close, 
+                                               color: Colors.red.shade700, size: 16),
+                                      constraints: const BoxConstraints(),
+                                      padding: EdgeInsets.zero,
+                                    ),
+                                  ],
+                                ),
+                              ),
                           ],
                         ),
                       );

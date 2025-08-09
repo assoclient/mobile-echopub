@@ -1,3 +1,4 @@
+import 'package:mobile/screens/auth/login_page.dart';
 import 'package:mobile/services/auth_service.dart';
 
 import '../../components/ambassador_bottom_nav.dart';
@@ -54,15 +55,16 @@ class _AmbassadorProfilPageState extends State<AmbassadorProfilPage> {
             onPressed: () {
               Navigator.pop(context);
               AuthService.clear();
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const LoginPage()));
               // TODO: Rediriger vers la page de connexion
-              ScaffoldMessenger.of(context).showSnackBar(
+             /*  ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: const Text('Déconnecté.'),
                   backgroundColor: AppColors.primaryBlue,
                   behavior: SnackBarBehavior.floating,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-              );
+              ); */
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryBlue,
@@ -200,7 +202,7 @@ class _AmbassadorProfilPageState extends State<AmbassadorProfilPage> {
             ),
             const SizedBox(height: 16),
             // Location Information Card
-            Container(
+            /* Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -265,7 +267,7 @@ class _AmbassadorProfilPageState extends State<AmbassadorProfilPage> {
                 ],
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 24), */
             // Logout Button
             SizedBox(
               width: double.infinity,

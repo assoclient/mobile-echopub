@@ -108,16 +108,7 @@ class _MainScaffoldState extends State<MainScaffold> {
     final pages = isAmbassador ? _ambassadorPages : _advertiserPages;
     return Scaffold(
       body: pages[_selectedIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        onTap: (i) => setState(() => _selectedIndex = i),
-        items: isAmbassador
-            ? const []
-            : const [
-                BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Mes Annonces'),
-                BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Mon Compte'),
-              ],
-      ),
+     
     );
   }
 }

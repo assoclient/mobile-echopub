@@ -22,66 +22,19 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _isLoading = false;
   String? _apiError;
 
-  Future<void> _register() async {
+  Future<void> _register(Map<String, dynamic> completeData) async {
     setState(() {
       _isLoading = true;
       _apiError = null;
     });
     
-    final registrationData = {
-      'name': _name,
-      'email': _email,
-      'password': _password,
-      'role': _role,
-      'phone': _role == 'advertiser' ? _phoneController.text : null,
-      'whatsapp_number': _role == 'ambassador' ? _whatsappController.text : null,
-      'contacts_count': _role == 'ambassador' ? _contactsController.text : null,
-      'location': {
-          'countryCode':_countryDialCode,
-          'city': _role == 'ambassador' ? _cityController.text : null,
-          'region': _role == 'ambassador' ? _regionController.text : null,
-          'gps': {
-            'lat': _role == 'ambassador' ? _lat: null,
-            'lng': _role == 'ambassador' ? _lng : null
-          }
-      },
-    };
-
-    // Si c'est un ambassadeur, naviguer vers la page de collecte d'audience
-    if (_role == 'ambassador') {
-      final result = await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => AudienceCollectionPage(
-            userCity: _cityController.text,
-            userAgeRange: _ageRange,
-            userGender: _gender,
-            registrationData: registrationData,
-          ),
-        ),
-      );
-      
-      if (result != null) {
-        // Procéder à l'inscription avec les données d'audience
-        await _performRegistration(result);
-      } else {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    } else {
-      // Pour les annonceurs, procéder directement à l'inscription
-      await _performRegistration(registrationData);
-    }
-  }
-
-  Future<void> _performRegistration(Map<String, dynamic> data) async {
     final url = Uri.parse('${dotenv.env['API_BASE_URL'] ?? 'http://localhost:5000'}/api/auth/register');
     
     try {
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(data),
+        body: jsonEncode(completeData),
       );
       
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -116,17 +69,42 @@ class _RegisterPageState extends State<RegisterPage> {
     }
   }
 
+  void _proceedToAudienceCollection() {
+    final Map<String, dynamic> registrationData = {
+      'name': _name,
+      'email': _email,
+      'password': _password,
+      'role': _role,
+      'phone': _role == 'advertiser' ? _phoneController.text : null,
+      'whatsapp_number': _role == 'ambassador' ? _whatsappController.text : null,
+      'location': {
+          'countryCode':_countryDialCode,
+          'city': _role == 'ambassador' ? _cityController.text : null,
+          'region': _role == 'ambassador' ? _regionController.text : null,
+          'gps': {
+            'lat': _role == 'ambassador' ? _lat: null,
+            'lng': _role == 'ambassador' ? _lng : null
+          }
+      },
+    };
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => AudienceCollectionPage(
+          registrationData: registrationData,
+        ),
+      ),
+    );
+  }
+
   final _formKey = GlobalKey<FormState>();
   String? _name, _email, _password;
   String _role = 'ambassador';
-  String _ageRange = '18-25';
-  String _gender = 'M';
 
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _whatsappController = TextEditingController();
   final TextEditingController _cityController = TextEditingController();
   final TextEditingController _regionController = TextEditingController();
-  final TextEditingController _contactsController = TextEditingController();
   double? _lat, _lng;
   String? _locationError;
   String _countryDialCode = '+237'; // Par défaut Cameroun
@@ -273,6 +251,7 @@ class _RegisterPageState extends State<RegisterPage> {
                       },
                       disableLengthCheck: false,
                     ),
+                    
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _cityController,
@@ -291,67 +270,13 @@ class _RegisterPageState extends State<RegisterPage> {
                         prefixIcon: Icon(Icons.map, color: AppColors.primaryBlue),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _contactsController,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        labelText: 'Nombre de vue moyenne sur whatsapp',
-                        prefixIcon: Icon(Icons.people, color: AppColors.primaryBlue),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      value: _ageRange,
-                      decoration: InputDecoration(
-                        labelText: 'Tranche d\'âge',
-                        prefixIcon: Icon(Icons.calendar_today, color: AppColors.primaryBlue),
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: '18-25', child: Text('18-25 ans')),
-                        DropdownMenuItem(value: '26-35', child: Text('26-35 ans')),
-                        DropdownMenuItem(value: '36-45', child: Text('36-45 ans')),
-                        DropdownMenuItem(value: '46-55', child: Text('46-55 ans')),
-                        DropdownMenuItem(value: '56+', child: Text('56+ ans')),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() {
-                            _ageRange = value;
-                          });
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      value: _gender,
-                      decoration: InputDecoration(
-                        labelText: 'Genre',
-                        prefixIcon: Icon(Icons.person_outline, color: AppColors.primaryBlue),
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: 'M', child: Text('Masculin')),
-                        DropdownMenuItem(value: 'F', child: Text('Féminin')),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() {
-                            _gender = value;
-                          });
-                        }
-                      },
-                    ),
-                    // GPS optionnel (à brancher sur une vraie géoloc si besoin)
-                   // const SizedBox(height: 16),
-                    Row(
+                     Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        Expanded(
-                          child: Text(_lat != null ? "Lat: $_lat" : "Lat: -"),
+                        Container(
+                          child: Text( "Utiliser ma position", style: TextStyle(color: AppColors.primaryBlue,fontWeight: FontWeight.bold,fontSize: 16),),
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(_lng != null ? "Lon: $_lng" : "Lon: -"),
-                        ),
+                       
                         IconButton(
                           icon: const Icon(Icons.my_location),
                           onPressed: _detectLocation,
@@ -365,6 +290,38 @@ class _RegisterPageState extends State<RegisterPage> {
                   ] else ...[
                     // Rien à afficher (city, region, contacts cachés)
                   ],
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryBlue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.primaryBlue.withOpacity(0.3)),
+                      ),
+                      child: Column(
+                        children: [
+                          Icon(Icons.people, color: AppColors.primaryBlue, size: 32),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Statistiques d\'audience',
+                            style: TextStyle(
+                              color: AppColors.primaryBlue,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Vous serez redirigé vers une page pour collecter les statistiques de votre audience WhatsApp',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // GPS optionnel (à brancher sur une vraie géoloc si besoin)
+                   // const SizedBox(height: 16),
+                   
                   const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
@@ -374,7 +331,28 @@ class _RegisterPageState extends State<RegisterPage> {
                           : () {
                               if (_formKey.currentState!.validate()) {
                                 _formKey.currentState!.save();
-                                _register();
+                                if (_role == 'ambassador') {
+                                  _proceedToAudienceCollection();
+                                } else {
+                                  // Pour les annonceurs, enregistrer directement
+                                  final registrationData = {
+                                    'name': _name,
+                                    'email': _email,
+                                    'password': _password,
+                                    'role': _role,
+                                    'phone': _phoneController.text,
+                                    'location': {
+                                      'countryCode': _countryDialCode,
+                                      'city': null,
+                                      'region': null,
+                                      'gps': {
+                                        'lat': null,
+                                        'lng': null
+                                      }
+                                    },
+                                  };
+                                  _register(registrationData);
+                                }
                               }
                             },
                       child: _isLoading
@@ -383,7 +361,7 @@ class _RegisterPageState extends State<RegisterPage> {
                               height: 24,
                               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                             )
-                          : const Text('Continuer >>'),
+                          : const Text('Créer un compte'),
                     ),
                   ),
                   if (_apiError != null)

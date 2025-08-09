@@ -1,22 +1,35 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
+import 'package:mobile/services/auth_service.dart';
 import 'package:permission_handler/permission_handler.dart';
-import '../../models/contact.dart';
+import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../../theme.dart';
 
+class ContactData {
+  final String name;
+  String ageRange;
+  String gender;
+  String city;
+
+  ContactData({
+    required this.name,
+    this.ageRange = '18-25',
+    this.gender = 'M',
+    this.city = 'Douala',
+  });
+}
+
 class AudienceCollectionPage extends StatefulWidget {
-  final String userCity;
-  final String userAgeRange;
-  final String userGender;
   final Map<String, dynamic> registrationData;
+  final Function(Map<String, dynamic>)? onComplete; // Rendu optionnel
 
   const AudienceCollectionPage({
     Key? key,
-    required this.userCity,
-    required this.userAgeRange,
-    required this.userGender,
     required this.registrationData,
+    this.onComplete, // Rendu optionnel
   }) : super(key: key);
 
   @override
@@ -24,165 +37,221 @@ class AudienceCollectionPage extends StatefulWidget {
 }
 
 class _AudienceCollectionPageState extends State<AudienceCollectionPage> {
-  List<AudienceContact> _contacts = [];
-  List<AudienceContact> _filteredContacts = [];
-  bool _isLoading = true;
-  bool _hasPermission = false;
-  String _searchQuery = '';
+  List<ContactData> contacts = [];
+  List<Map<String, dynamic>> cities = [];
+  bool isLoading = true;
+  bool hasPermission = false;
+  String? errorMessage;
+  bool isRegistering = false; // Nouveau: pour l'état de l'inscription
+
+  final List<String> ageRanges = ['18-25', '26-35', '36-45', '46-55', '56+'];
+  final List<String> genders = ['M', 'F'];
 
   @override
   void initState() {
     super.initState();
-    _requestPermission();
+    _loadCities();
+    _requestContactsPermission();
   }
 
-  Future<void> _requestPermission() async {
-    final status = await Permission.contacts.request();
-    setState(() {
-      _hasPermission = status.isGranted;
-    });
-    
-    if (_hasPermission) {
-      await _loadContacts();
+  Future<void> _loadCities() async {
+    try {
+      final String citiesJson = await DefaultAssetBundle.of(context)
+          .loadString('assets/cities_cm.json');
+      final List<dynamic> citiesList = json.decode(citiesJson);
+      setState(() {
+        cities = citiesList.cast<Map<String, dynamic>>();
+      });
+    } catch (e) {
+      print('Erreur lors du chargement des villes: $e');
     }
+  }
+
+  Future<void> _requestContactsPermission() async {
+    if (!await FlutterContacts.requestPermission(readonly: true)) {
+      setState(() {
+        errorMessage = 'Permission d\'accès aux contacts refusée';
+        isLoading = false;
+      });
+      return;
+    }
+    
+    await _loadContacts();
   }
 
   Future<void> _loadContacts() async {
     try {
+      final List<Contact> deviceContacts = await FlutterContacts.getContacts(
+        withProperties: true,
+        withPhoto: false,
+      );
+      
       setState(() {
-        _isLoading = true;
-      });
-
-      final contacts = await FlutterContacts.getContacts();
-      final List<AudienceContact> processedContacts = [];
-
-      for (var contact in contacts) {
-        if (contact.displayName.isNotEmpty) {
-          processedContacts.add(AudienceContact(
+        contacts = deviceContacts.map((contact) {
+          return ContactData(
             name: contact.displayName,
-            city: widget.userCity,
-            ageRange: widget.userAgeRange,
-            gender: widget.userGender,
-          ));
-        }
-      }
-
-      setState(() {
-        _contacts = processedContacts;
-        _filteredContacts = processedContacts;
-        _isLoading = false;
+          );
+        }).toList();
+        isLoading = false;
       });
     } catch (e) {
       setState(() {
-        _isLoading = false;
+        errorMessage = 'Erreur lors du chargement des contacts: $e';
+        isLoading = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur lors du chargement des contacts: $e')),
-      );
     }
   }
 
-  void _filterContacts(String query) {
+  void _updateContactData(int index, String field, String value) {
     setState(() {
-      _searchQuery = query;
-      if (query.isEmpty) {
-        _filteredContacts = _contacts;
-      } else {
-        _filteredContacts = _contacts
-            .where((contact) =>
-                contact.name.toLowerCase().contains(query.toLowerCase()))
-            .toList();
+      switch (field) {
+        case 'ageRange':
+          contacts[index].ageRange = value;
+          break;
+        case 'gender':
+          contacts[index].gender = value;
+          break;
+        case 'city':
+          contacts[index].city = value;
+          break;
       }
     });
   }
 
-  void _updateContact(int index, String field, String value) {
-    setState(() {
-      final contact = _filteredContacts[index];
-      final updatedContact = AudienceContact(
-        name: field == 'name' ? value : contact.name,
-        city: field == 'city' ? value : contact.city,
-        ageRange: field == 'ageRange' ? value : contact.ageRange,
-        gender: field == 'gender' ? value : contact.gender,
-      );
-      
-      _filteredContacts[index] = updatedContact;
-      
-      // Mettre à jour dans la liste principale aussi
-      final mainIndex = _contacts.indexWhere((c) => c.name == contact.name);
-      if (mainIndex != -1) {
-        _contacts[mainIndex] = updatedContact;
-      }
-    });
-  }
+  Map<String, dynamic> _calculateAudienceStats() {
+    final Map<String, Map<String, int>> stats = {
+      'city': {},
+      'age': {},
+      'genre': {},
+    };
 
-  Future<void> _proceedToRegistration() async {
-    // Préparer les données d'audience
-    final audienceData = _prepareAudienceData();
-    
-    // Ajouter les données d'audience au payload d'inscription
-    final registrationPayload = Map<String, dynamic>.from(widget.registrationData);
-    registrationPayload['audience'] = audienceData;
-    
-    // Naviguer vers la page d'inscription finale ou procéder à l'inscription
-    _registerWithAudienceData(registrationPayload);
-  }
-
-  Map<String, dynamic> _prepareAudienceData() {
-    // Calculer les pourcentages pour chaque ville
-    final cityStats = <String, int>{};
-    final ageStats = <String, int>{};
-    final genderStats = <String, int>{};
-    
-    for (var contact in _contacts) {
-      cityStats[contact.city] = (cityStats[contact.city] ?? 0) + 1;
-      ageStats[contact.ageRange] = (ageStats[contact.ageRange] ?? 0) + 1;
-      genderStats[contact.gender] = (genderStats[contact.gender] ?? 0) + 1;
+    for (final contact in contacts) {
+      // Statistiques par ville
+      stats['city']![contact.city] = (stats['city']![contact.city] ?? 0) + 1;
+      
+      // Statistiques par tranche d'âge
+      stats['age']![contact.ageRange] = (stats['age']![contact.ageRange] ?? 0) + 1;
+      
+      // Statistiques par genre
+      stats['genre']![contact.gender] = (stats['genre']![contact.gender] ?? 0) + 1;
     }
+
+    final int totalContacts = contacts.length;
     
-    final total = _contacts.length;
-    
+    // Convertir en pourcentages
+    final List<Map<String, dynamic>> cityStats = stats['city']!.entries.map((entry) {
+      return {
+        'pourcentage': ((entry.value / totalContacts) * 100).round(),
+        'value': entry.key,
+      };
+    }).toList();
+
+    final List<Map<String, dynamic>> ageStats = stats['age']!.entries.map((entry) {
+      final ageRange = entry.key;
+      final parts = ageRange.split('-');
+      return {
+        'pourcentage': ((entry.value / totalContacts) * 100).round(),
+        'value': {
+          'min': int.parse(parts[0]),
+          'max': parts[1] == '+' ? 100 : int.parse(parts[1]),
+        },
+      };
+    }).toList();
+
+    final List<Map<String, dynamic>> genreStats = stats['genre']!.entries.map((entry) {
+      return {
+        'pourcentage': ((entry.value / totalContacts) * 100).round(),
+        'value': entry.key,
+      };
+    }).toList();
+
     return {
-      'city': cityStats.entries.map((entry) => {
-        'pourcentage': ((entry.value / total) * 100).round(),
-        'value': entry.key,
-      }).toList(),
-      'age': ageStats.entries.map((entry) => {
-        'pourcentage': ((entry.value / total) * 100).round(),
-        'value': _parseAgeRange(entry.key),
-      }).toList(),
-      'genre': genderStats.entries.map((entry) => {
-        'pourcentage': ((entry.value / total) * 100).round(),
-        'value': entry.key,
-      }).toList(),
+      'audience': {
+        'city': cityStats,
+        'age': ageStats,
+        'genre': genreStats,
+      },
     };
   }
 
-  Map<String, dynamic> _parseAgeRange(String ageRange) {
-    // Convertir les tranches d'âge en format min/max
-    switch (ageRange) {
-      case '18-25':
-        return {'min': 18, 'max': 25};
-      case '26-35':
-        return {'min': 26, 'max': 35};
-      case '36-45':
-        return {'min': 36, 'max': 45};
-      case '46-55':
-        return {'min': 46, 'max': 55};
-      case '56+':
-        return {'min': 56, 'max': 100};
-      default:
-        return {'min': 18, 'max': 65};
-    }
-  }
+  Future<void> _completeRegistration() async {
+    setState(() {
+      isRegistering = true;
+    });
 
-  Future<void> _registerWithAudienceData(Map<String, dynamic> payload) async {
-    // Ici, vous pouvez appeler votre API d'inscription avec les données d'audience
-    // Pour l'instant, on affiche juste les données
-    print('Payload d\'inscription avec audience: ${jsonEncode(payload)}');
-    
-    // Naviguer vers la page suivante ou procéder à l'inscription
-    Navigator.of(context).pop(payload);
+    try {
+      final audienceStats = _calculateAudienceStats();
+      final completeData = {
+        ...widget.registrationData,
+        ...audienceStats,
+      };
+
+      // Appeler le callback si fourni (pour compatibilité)
+      if (widget.onComplete != null) {
+        widget.onComplete!(completeData);
+        return; // Sortir si le callback gère l'inscription
+      }
+
+      // Envoyer la requête d'inscription directement au backend
+      final response = await http.post(
+        Uri.parse('${dotenv.env['API_BASE_URL'] ?? 'http://localhost:5000/api'}/api/auth/register'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(completeData),
+      );
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+       // final responseData = jsonDecode(response.body);
+        
+        // Afficher un message de succès
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Inscription réussie ! Bienvenue ${completeData['name']}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // Attendre un peu avant de naviguer
+        await Future.delayed(const Duration(seconds: 2));
+        
+       final resp = jsonDecode(response.body);
+        final token = resp['token'];
+        final user = resp['user'];
+        // Stocke le token et l'utilisateur
+        await AuthService.saveAuth(token, user);
+        if (mounted) {
+          if (user != null && user['role'] == 'ambassador') {
+            Navigator.of(context).pushReplacementNamed('/ambassador');
+          } else if (user != null && user['role'] == 'advertiser') {
+            Navigator.of(context).pushReplacementNamed('/advertiser');
+          }
+        }
+      } else {
+        final errorData = jsonDecode(response.body);
+        final errorMessage = errorData['message'] ?? 'Erreur lors de l\'inscription';
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erreur de connexion: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isRegistering = false;
+        });
+      }
+    }
   }
 
   @override
@@ -194,255 +263,305 @@ class _AudienceCollectionPageState extends State<AudienceCollectionPage> {
         backgroundColor: AppColors.primaryBlue,
         foregroundColor: Colors.white,
       ),
-      body: Column(
-        children: [
-          // En-tête avec informations
-          Container(
-            padding: const EdgeInsets.all(16),
-            color: AppColors.softGreen,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Collecte des statistiques d\'audience',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: AppColors.primaryBlue,
-                    fontWeight: FontWeight.bold,
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : errorMessage != null
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.error, size: 64, color: Colors.red),
+                      const SizedBox(height: 16),
+                      Text(errorMessage!, style: const TextStyle(fontSize: 16)),
+                      const SizedBox(height: 24),
+                      ElevatedButton(
+                        onPressed: _requestContactsPermission,
+                        child: const Text('Réessayer'),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Nous collectons les informations de vos contacts pour analyser votre audience. '
-                  'Vos données par défaut sont pré-remplies.',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ],
-            ),
-          ),
-          
-          // Barre de recherche
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: TextField(
-              decoration: InputDecoration(
-                hintText: 'Rechercher un contact...',
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              onChanged: _filterContacts,
-            ),
-          ),
-          
-          // Liste des contacts
-          Expanded(
-            child: _hasPermission
-                ? _isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : _filteredContacts.isEmpty
-                        ? const Center(
-                            child: Text('Aucun contact trouvé'),
-                          )
-                        : ListView.builder(
-                            itemCount: _filteredContacts.length,
-                            itemBuilder: (context, index) {
-                              final contact = _filteredContacts[index];
-                              return Card(
-                                margin: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 4,
-                                ),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(16),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      // Nom du contact
-                                      Text(
-                                        contact.name,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium
-                                            ?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 12),
-                                      
-                                      // Informations d'audience
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: _buildInfoField(
-                                              'Ville',
-                                              contact.city,
-                                              (value) => _updateContact(
-                                                index,
-                                                'city',
-                                                value,
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: _buildInfoField(
-                                              'Âge',
-                                              contact.ageRange,
-                                              (value) => _updateContact(
-                                                index,
-                                                'ageRange',
-                                                value,
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: _buildInfoField(
-                                              'Genre',
-                                              contact.gender,
-                                              (value) => _updateContact(
-                                                index,
-                                                'gender',
-                                                value,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
+                )
+              : Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      color: AppColors.primaryBlue.withOpacity(0.1),
+                      child: Column(
+                        children: [
+                          Icon(Icons.people, size: 48, color: AppColors.primaryBlue),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Statistiques d\'audience',
+                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                              color: AppColors.primaryBlue,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '${contacts.length} contacts chargés',
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Modifiez les données selon vos connaissances de votre audience',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 14, color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: contacts.length,
+                        itemBuilder: (context, index) {
+                          final contact = contacts[index];
+                          return Card(
+                            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    contact.name,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
+                                  const SizedBox(height: 12),
+                                  LayoutBuilder(
+                                    builder: (context, constraints) {
+                                      if (constraints.maxWidth < 600) {
+                                        // Layout en colonnes pour les petits écrans
+                                        return Column(
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      const Text('Tranche d\'âge', style: TextStyle(fontSize: 12)),
+                                                      DropdownButtonFormField<String>(
+                                                        value: contact.ageRange,
+                                                        decoration: const InputDecoration(
+                                                          border: OutlineInputBorder(),
+                                                          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                          isDense: true,
+                                                        ),
+                                                        items: ageRanges.map((age) {
+                                                          return DropdownMenuItem(
+                                                            value: age,
+                                                            child: Text(age, style: const TextStyle(fontSize: 12)),
+                                                          );
+                                                        }).toList(),
+                                                        onChanged: (value) {
+                                                          if (value != null) {
+                                                            _updateContactData(index, 'ageRange', value);
+                                                          }
+                                                        },
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      const Text('Genre', style: TextStyle(fontSize: 12)),
+                                                      DropdownButtonFormField<String>(
+                                                        value: contact.gender,
+                                                        decoration: const InputDecoration(
+                                                          border: OutlineInputBorder(),
+                                                          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                          isDense: true,
+                                                        ),
+                                                        items: genders.map((gender) {
+                                                          return DropdownMenuItem(
+                                                            value: gender,
+                                                            child: Text(gender, style: const TextStyle(fontSize: 12)),
+                                                          );
+                                                        }).toList(),
+                                                        onChanged: (value) {
+                                                          if (value != null) {
+                                                            _updateContactData(index, 'gender', value);
+                                                          }
+                                                        },
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 12),
+                                            Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                const Text('Ville', style: TextStyle(fontSize: 12)),
+                                                DropdownButtonFormField<String>(
+                                                  value: contact.city,
+                                                  decoration: const InputDecoration(
+                                                    border: OutlineInputBorder(),
+                                                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                    isDense: true,
+                                                  ),
+                                                  items: cities.map((city) {
+                                                    return DropdownMenuItem<String>(
+                                                      value: city['name'],
+                                                      child: Text(city['name'], style: const TextStyle(fontSize: 12)),
+                                                    );
+                                                  }).toList(),
+                                                  onChanged: (value) {
+                                                    if (value != null) {
+                                                      _updateContactData(index, 'city', value);
+                                                    }
+                                                  },
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        );
+                                      } else {
+                                        // Layout en ligne pour les grands écrans
+                                        return Row(
+                                          children: [
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  const Text('Tranche d\'âge', style: TextStyle(fontSize: 12)),
+                                                  DropdownButtonFormField<String>(
+                                                    value: contact.ageRange,
+                                                    decoration: const InputDecoration(
+                                                      border: OutlineInputBorder(),
+                                                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                      isDense: true,
+                                                    ),
+                                                    items: ageRanges.map((age) {
+                                                      return DropdownMenuItem(
+                                                        value: age,
+                                                        child: Text(age, style: const TextStyle(fontSize: 12)),
+                                                      );
+                                                    }).toList(),
+                                                    onChanged: (value) {
+                                                      if (value != null) {
+                                                        _updateContactData(index, 'ageRange', value);
+                                                      }
+                                                    },
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  const Text('Genre', style: TextStyle(fontSize: 12)),
+                                                  DropdownButtonFormField<String>(
+                                                    value: contact.gender,
+                                                    decoration: const InputDecoration(
+                                                      border: OutlineInputBorder(),
+                                                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                      isDense: true,
+                                                    ),
+                                                    items: genders.map((gender) {
+                                                      return DropdownMenuItem(
+                                                        value: gender,
+                                                        child: Text(gender, style: const TextStyle(fontSize: 12)),
+                                                      );
+                                                    }).toList(),
+                                                    onChanged: (value) {
+                                                      if (value != null) {
+                                                        _updateContactData(index, 'gender', value);
+                                                      }
+                                                    },
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  const Text('Ville', style: TextStyle(fontSize: 12)),
+                                                  DropdownButtonFormField<String>(
+                                                    value: contact.city,
+                                                    decoration: const InputDecoration(
+                                                      border: OutlineInputBorder(),
+                                                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                      isDense: true,
+                                                    ),
+                                                    items: cities.map((city) {
+                                                      return DropdownMenuItem<String>(
+                                                        value: city['name'],
+                                                        child: Text(city['name'], style: const TextStyle(fontSize: 12)),
+                                                      );
+                                                    }).toList(),
+                                                    onChanged: (value) {
+                                                      if (value != null) {
+                                                        _updateContactData(index, 'city', value);
+                                                      }
+                                                    },
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        );
+                                      }
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: isRegistering ? null : _completeRegistration,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primaryBlue,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          child: isRegistering
+                              ? const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                      ),
+                                    ),
+                                    SizedBox(width: 12),
+                                    Text(
+                                      'Inscription en cours...',
+                                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                )
+                              : const Text(
+                                  'Terminer l\'inscription',
+                                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                                 ),
-                              );
-                            },
-                          )
-                : _buildPermissionRequest(),
-          ),
-          
-          // Bouton de continuation
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _contacts.isNotEmpty ? _proceedToRegistration : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryBlue,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                child: Text(
-                  'Continuer avec ${_contacts.length} contacts',
-                  style: const TextStyle(fontSize: 16),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
-
-  Widget _buildInfoField(String label, String value, Function(String) onChanged) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Colors.grey[600],
-          ),
-        ),
-        const SizedBox(height: 4),
-        if (label == 'Genre')
-          DropdownButtonFormField<String>(
-            value: value,
-            decoration: InputDecoration(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(4),
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 8,
-                vertical: 4,
-              ),
-            ),
-            items: const [
-              DropdownMenuItem(value: 'M', child: Text('M')),
-              DropdownMenuItem(value: 'F', child: Text('F')),
-            ],
-            onChanged: (newValue) {
-              if (newValue != null) onChanged(newValue);
-            },
-          )
-        else if (label == 'Âge')
-          DropdownButtonFormField<String>(
-            value: value,
-            decoration: InputDecoration(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(4),
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 8,
-                vertical: 4,
-              ),
-            ),
-            items: const [
-              DropdownMenuItem(value: '18-25', child: Text('18-25')),
-              DropdownMenuItem(value: '26-35', child: Text('26-35')),
-              DropdownMenuItem(value: '36-45', child: Text('36-45')),
-              DropdownMenuItem(value: '46-55', child: Text('46-55')),
-              DropdownMenuItem(value: '56+', child: Text('56+')),
-            ],
-            onChanged: (newValue) {
-              if (newValue != null) onChanged(newValue);
-            },
-          )
-        else
-          TextFormField(
-            initialValue: value,
-            decoration: InputDecoration(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(4),
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 8,
-                vertical: 4,
-              ),
-            ),
-            onChanged: onChanged,
-          ),
-      ],
-    );
-  }
-
-  Widget _buildPermissionRequest() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.contact_phone,
-            size: 64,
-            color: Colors.grey[400],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Permission requise',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Nous avons besoin d\'accéder à vos contacts pour collecter les statistiques d\'audience.',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: _requestPermission,
-            child: const Text('Autoriser l\'accès'),
-          ),
-        ],
-      ),
-    );
-  }
-} 
+}
