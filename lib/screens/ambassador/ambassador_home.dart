@@ -411,9 +411,10 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
                     itemCount: filteredCampaigns.length,
                     itemBuilder: (context, i) {
                       final c = filteredCampaigns[i];
-                      final campaignId = c['_id']?.toString() ?? '';
+                      final campaignId = c['id']?.toString() ?? '';
                       final locationType = c['location_type'];
                       final locationValue = c['target_location'].map((e) => e['value']).join(', ');
+                      debugPrint('Campaign ID: $campaignId');
                       // Supprimé cpv et cpc car non utilisés
                       final endDate = c['end_date'] is DateTime ? c['end_date'] : null;
                       return Container(

@@ -2,8 +2,15 @@ import '../../components/ambassador_bottom_nav.dart';
 import 'ambassador_nav_helper.dart';
 import 'package:flutter/material.dart';
 import 'dart:io';
+import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../../theme.dart';
+import 'package:exif/exif.dart';
+import '../../widgets/screenshot_capture_widget.dart';
+import '../../plugins/screenshot_service.dart';
 
 class AmbassadorPublicationsPage extends StatefulWidget {
   const AmbassadorPublicationsPage({Key? key}) : super(key: key);
@@ -13,99 +20,481 @@ class AmbassadorPublicationsPage extends StatefulWidget {
 }
 
 class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage> {
-  List<Map<String, dynamic>> _publications = [
-    {
-      'title': 'Statut Pizza Hut',
-      'date': DateTime.now().subtract(const Duration(days: 1)),
-      'status': 'Publié',
-      'validation': 'Validée',
-      'views': 120,
-      'gain': 2400,
-      'capture1': 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=400&q=80',
-      'capture2': null,
-    },
-    {
-      'title': 'Offre Orange Money',
-      'date': DateTime.now().subtract(const Duration(days: 2)),
-      'status': 'Publié',
-      'validation': 'En attente',
-      'views': 0,
-      'gain': 0,
-      'capture1': 'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=crop&w=400&q=80',
-      'capture2': null,
-    },
-  ];
-
+  List<Map<String, dynamic>> _publications = [];
+  bool _isLoading = true;
+  String? _error;
   String _search = '';
   DateTime? _dateStart;
   DateTime? _dateEnd;
+  int _currentPage = 1;
+  int _totalCount = 0;
+  bool _hasMore = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPublications();
+  }
+
+  Future<void> _loadPublications({bool refresh = false}) async {
+    if (refresh) {
+      setState(() {
+        _publications.clear();
+        _currentPage = 1;
+        _hasMore = true;
+        _isLoading = true;
+        _error = null;
+      });
+    }
+
+    try {
+      final storage = const FlutterSecureStorage();
+      final token = await storage.read(key: 'auth_token');
+      
+      if (token == null) {
+        throw Exception('Token d\'authentification manquant');
+      }
+
+      final apiUrl = dotenv.env['API_BASE_URL'] ?? 'http://localhost:5000';
+      final url = Uri.parse('$apiUrl/api/ambassador-publications/my-publications?page=$_currentPage&pageSize=10');
+      
+      final response = await http.get(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final List<dynamic> publications = data['data'] ?? [];
+        
+        setState(() {
+          _isLoading = false;
+          _totalCount = data['totalCount'] ?? 0;
+          _hasMore = publications.length >= 10; // Si on a reçu 10 éléments, il y en a peut-être plus
+          
+          // Convertir les données du backend au format attendu par l'UI
+          final convertedPublications = publications.map<Map<String, dynamic>>((pub) {
+            return {
+              'id': pub['_id'], // ID de l'AmbassadorCampaign
+              'campaignId': pub['campaign']?['_id'], // ID de la campagne
+              'title': pub['campaign']?['title'] ?? 'Campagne sans titre',
+              'date': pub['createdAt'] != null ? DateTime.tryParse(pub['createdAt']) ?? DateTime.now() : DateTime.now(),
+              'status': _getStatusText(pub['status']),
+              'validation': _getValidationText(pub['status']),
+              'views': pub['views_count'] ?? 0,
+              'gain': pub['amount_earned'] ?? 0,
+              'capture1': pub['screenshot_url'],
+              'capture2': pub['screenshot_url2'],
+              'originalStatus': pub['status'], // Garder le statut original pour référence
+            };
+          }).toList();
+          
+          if (refresh) {
+            _publications = convertedPublications;
+          } else {
+            _publications.addAll(convertedPublications);
+          }
+          
+          _currentPage++;
+        });
+      } else {
+        throw Exception('Erreur serveur: ${response.statusCode}');
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _error = e.toString();
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur lors du chargement: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        );
+      }
+    }
+  }
+
+  String _getStatusText(String? status) {
+    switch (status) {
+      case 'published':
+        return 'Publié';
+      case 'submitted':
+        return 'Soumis';
+      case 'validated':
+        return 'Publié';
+      case 'rejected':
+        return 'Rejeté';
+      default:
+        return 'Inconnu';
+    }
+  }
+
+  String _getValidationText(String? status) {
+    switch (status) {
+      case 'published':
+        return 'Publié';
+      case 'submitted':
+        return 'En cours de validation';
+      case 'validated':
+        return 'Validée';
+      case 'rejected':
+        return 'Refusée';
+      default:
+        return 'En attente';
+    }
+  }
 
   Future<void> _pickCapture(int index, int captureNum) async {
+    final pub = _publications[index];
+    debugPrint('pub: $pub');
+    
+    // Vérifier les conditions pour le remplacement de la première preuve
+    if (captureNum == 1 && pub['capture2'] != null && pub['capture2'].isNotEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Impossible de remplacer la première preuve : la deuxième preuve a déjà été soumise'),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        );
+      }
+      return;
+    }
+
+    // Afficher le choix entre capture automatique et galerie
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('${captureNum == 1 ? "Première" : "Deuxième"} preuve'),
+        content: const Text('Comment voulez-vous obtenir la capture d\'écran ?'),
+        actions: [
+          TextButton.icon(
+            onPressed: () => Navigator.pop(context, 'auto'),
+            icon: const Icon(Icons.camera_alt),
+            label: Text(Platform.isAndroid 
+                ? 'Capture automatique' 
+                : 'Détecter capture'),
+          ),
+          /* TextButton.icon(
+            onPressed: () => Navigator.pop(context, 'gallery'),
+            icon: const Icon(Icons.photo_library),
+            label: const Text('Galerie'),
+          ), */
+        ],
+      ),
+    );
+
+    if (choice == null) return;
+
+    if (choice == 'auto') {
+      // Utiliser le nouveau système de capture automatique
+      _showScreenshotCaptureDialog(pub, captureNum);
+    } else {
+      // Utiliser l'ancienne méthode de galerie
+      _pickFromGallery(pub, captureNum);
+    }
+  }
+
+  void _showScreenshotCaptureDialog(Map<String, dynamic> pub, int captureNum) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: ScreenshotCaptureWidget(
+          campaignId: pub['campaignId'] ?? '',
+          campaignTitle: pub['title'] ?? 'Campagne',
+          onScreenshotCaptured: (imagePath) async {
+            // Fermer le dialog de capture manuellement pour contrôler l'affichage
+            if (mounted && Navigator.canPop(context)) {
+              Navigator.pop(context);
+            }
+            // Uploader et afficher le résultat
+            await _uploadCapturedScreenshot(pub, imagePath, captureNum);
+          },
+          onTimeout: () {
+            if (mounted && Navigator.canPop(context)) {
+              Navigator.pop(context);
+            }
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text('Timeout atteint - Veuillez recommencer'),
+                  backgroundColor: Colors.orange,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              );
+            }
+          },
+          onError: () {
+            if (mounted && Navigator.canPop(context)) {
+              Navigator.pop(context);
+            }
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text('Erreur lors de la capture - Essayez la galerie'),
+                  backgroundColor: Colors.red,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              );
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickFromGallery(Map<String, dynamic> pub, int captureNum) async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery);
-    if (picked != null) {
-      setState(() {
-        _publications[index]['capture$captureNum'] = picked.path;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Capture ${captureNum == 1 ? "initiale" : "18h"} enregistrée.'),
-          backgroundColor: AppColors.primaryBlue,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-      );
+    
+    if (picked == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Aucune image sélectionnée.')),
+        );
+      }
+      return;
     }
-  }
 
-  void _deletePublication(int index) {
-    setState(() {
-      _publications.removeAt(index);
-    });
-  }
-
-  void _editPublication(int index) async {
-    final result = await showDialog<String>(
+    final imageFile = File(picked.path);
+    
+    // Confirmation avant upload
+    final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) {
-        final controller = TextEditingController(text: _publications[index]['title']);
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Modifier la publication', style: TextStyle(fontWeight: FontWeight.w600)),
-          content: TextField(
-            controller: controller,
-            decoration: InputDecoration(
-              labelText: 'Titre',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: AppColors.primaryBlue, width: 2),
+      builder: (context) => AlertDialog(
+        title: Text('Confirmer le remplacement'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Voulez-vous remplacer la ${captureNum == 1 ? "première" : "deuxième"} preuve pour cette campagne ?'),
+            const SizedBox(height: 16),
+            Container(
+              height: 200,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade300),
               ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Annuler', style: TextStyle(color: Colors.grey)),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, controller.text),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryBlue,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.file(
+                  imageFile,
+                  fit: BoxFit.cover,
+                ),
               ),
-              child: const Text('Enregistrer'),
             ),
           ],
-        );
-      },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryBlue,
+            ),
+            child: const Text('Remplacer', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
     );
-    if (result != null && result.isNotEmpty) {
-      setState(() {
-        _publications[index]['title'] = result;
-      });
+
+    if (confirm == true) {
+      await _uploadReplacementProof(pub, imageFile, captureNum);
     }
+  }
+
+  Future<void> _uploadCapturedScreenshot(Map<String, dynamic> pub, String imagePath, int captureNum) async {
+    final imageFile = File(imagePath);
+    
+    // Confirmation avant upload
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmer la capture'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Voulez-vous utiliser cette capture comme ${captureNum == 1 ? "première" : "deuxième"} preuve ?'),
+            const SizedBox(height: 16),
+            Container(
+              height: 200,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.file(
+                  imageFile,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Refuser'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryBlue,
+            ),
+            child: const Text('Confirmer', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await _uploadReplacementProof(pub, imageFile, captureNum);
+    }
+  }
+
+  Future<void> _uploadReplacementProof(Map<String, dynamic> pub, File imageFile, int captureNum) async {
+    try {
+      final storage = const FlutterSecureStorage();
+      final token = await storage.read(key: 'auth_token');
+      
+      if (token == null) {
+        throw Exception('Token d\'authentification manquant');
+      }
+
+      final apiUrl = dotenv.env['API_BASE_URL'] ?? 'http://localhost:5000';
+      Uri uri;
+      
+      // Choisir l'endpoint en fonction du numéro de capture
+      if (captureNum == 1) {
+        // Pour la première preuve, utiliser l'ID de campagne
+        final campaignId = pub['campaignId']; // L'ID de la campagne
+        if (campaignId == null) {
+          throw Exception('ID de campagne manquant');
+        }
+        uri = Uri.parse('$apiUrl/api/upload/screenshot/$campaignId');
+      } else {
+        // Pour la deuxième preuve, utiliser l'ID de l'AmbassadorCampaign
+        final ambassadorCampaignId = pub['id']; // L'ID de l'AmbassadorCampaign
+        uri = Uri.parse('$apiUrl/api/upload/screenshot2/$ambassadorCampaignId');
+      }
+
+      var request = http.MultipartRequest('POST', uri);
+      request.headers['Authorization'] = 'Bearer $token';
+      
+      // Ajouter le fichier
+      var multipartFile = await http.MultipartFile.fromPath(
+        'file',
+        imageFile.path,
+      );
+      request.files.add(multipartFile);
+
+      // Afficher l'indicateur de chargement
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(color: AppColors.primaryBlue),
+              const SizedBox(width: 20),
+              const Text('Upload en cours...'),
+            ],
+          ),
+        ),
+      );
+
+      // Envoyer la requête
+      var streamedResponse = await request.send();
+      var response = await http.Response.fromStream(streamedResponse);
+
+            // Fermer le dialog de chargement
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(responseData['message'] ?? 'Preuve remplacée avec succès !'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          );
+        }
+        
+        // Recharger les publications pour mettre à jour l'affichage
+        _loadPublications(refresh: true);
+        
+        // Retourner à l'app après un délai pour que l'utilisateur voie le message
+        Future.delayed(const Duration(seconds: 2), () {
+          ScreenshotService.returnToApp();
+        });
+        
+      } else {
+        final errorData = jsonDecode(response.body);
+        final errorMessage = errorData['message'] ?? 'Erreur lors du remplacement';
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(errorMessage),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      // Fermer le dialog de chargement en cas d'erreur
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur de connexion: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _loadMorePublications() async {
+    if (!_hasMore || _isLoading) return;
+    
+    setState(() {
+      _isLoading = true;
+    });
+    
+    await _loadPublications();
   }
 
   @override
@@ -137,6 +526,13 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Colors.white),
+            onPressed: () => _loadPublications(refresh: true),
+            tooltip: 'Rafraîchir',
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -259,34 +655,103 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
             ),
           ),
           Expanded(
-            child: filtered.isEmpty
+            child: _isLoading && _publications.isEmpty
                 ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(
-                          Icons.article_outlined,
-                          size: 64,
-                          color: Colors.grey[400],
-                        ),
+                        CircularProgressIndicator(color: AppColors.primaryBlue),
                         const SizedBox(height: 16),
                         Text(
-                          'Aucune publication',
+                          'Chargement des publications...',
                           style: TextStyle(
-                            fontSize: 18,
                             color: Colors.grey[600],
-                            fontWeight: FontWeight.w500,
+                            fontSize: 16,
                           ),
                         ),
                       ],
                     ),
                   )
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: filtered.length,
-                    itemBuilder: (context, i) {
-                      final pub = filtered[i];
-                      return Container(
+                : _error != null && _publications.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Erreur lors du chargement',
+                              style: const TextStyle(color: Colors.red, fontSize: 16),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 16),
+                            ElevatedButton(
+                              onPressed: () => _loadPublications(refresh: true),
+                              child: const Text('Réessayer'),
+                            ),
+                          ],
+                        ),
+                      )
+                    : filtered.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.article_outlined,
+                                  size: 64,
+                                  color: Colors.grey[400],
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  _publications.isEmpty 
+                                    ? 'Aucune publication trouvée'
+                                    : 'Aucune publication ne correspond aux filtres',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    color: Colors.grey[600],
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                if (_publications.isEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Commencez à publier des campagnes pour les voir ici !',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey[500],
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          )
+                        : NotificationListener<ScrollNotification>(
+                            onNotification: (ScrollNotification scrollInfo) {
+                              if (!_isLoading &&
+                                  _hasMore &&
+                                  scrollInfo.metrics.pixels == scrollInfo.metrics.maxScrollExtent) {
+                                _loadMorePublications();
+                              }
+                              return false;
+                            },
+                            child: ListView.builder(
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              itemCount: filtered.length + (_hasMore ? 1 : 0),
+                              itemBuilder: (context, i) {
+                                // Si c'est le dernier élément et qu'on a plus de données à charger
+                                if (i >= filtered.length) {
+                                  return Container(
+                                    padding: const EdgeInsets.all(20),
+                                    child: Center(
+                                      child: CircularProgressIndicator(color: AppColors.primaryBlue),
+                                    ),
+                                  );
+                                }
+                                
+                                final pub = filtered[i];
+                                return Container(
                         margin: const EdgeInsets.only(bottom: 16),
                         decoration: BoxDecoration(
                           color: Colors.white,
@@ -304,53 +769,15 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Header with title and actions
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      pub['title'],
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 18,
-                                        color: Colors.black87,
-                                      ),
+                                  // Header with title
+                                  Text(
+                                    pub['title'],
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 18,
+                                      color: Colors.black87,
                                     ),
                                   ),
-                                  PopupMenuButton<String>(
-                                    icon: const Icon(Icons.more_vert, color: Colors.grey),
-                                    onSelected: (value) {
-                                      if (value == 'edit') {
-                                        _editPublication(_publications.indexOf(pub));
-                                      } else if (value == 'delete') {
-                                        _deletePublication(_publications.indexOf(pub));
-                                      }
-                                    },
-                                    itemBuilder: (context) => [
-                                      const PopupMenuItem(
-                                        value: 'edit',
-                                        child: Row(
-                                          children: [
-                                            Icon(Icons.edit, color: Colors.orange, size: 20),
-                                            SizedBox(width: 8),
-                                            Text('Modifier'),
-                                          ],
-                                        ),
-                                      ),
-                                      const PopupMenuItem(
-                                        value: 'delete',
-                                        child: Row(
-                                          children: [
-                                            Icon(Icons.delete, color: Colors.red, size: 20),
-                                            SizedBox(width: 8),
-                                            Text('Supprimer'),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
                               const SizedBox(height: 12),
                               // Status and date
                               Row(
@@ -455,19 +882,21 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
                                 children: [
                                   Expanded(
                                     child: _buildProofSection(
-                                      title: 'Preuve initiale',
+                                      title: 'Preuve 1',
                                       imageUrl: pub['capture1'],
-                                      onTap: () => _pickCapture(_publications.indexOf(pub), 1),
+                                      onTap: () => _pickCapture(i, 1),
                                       isInitial: true,
+                                      isUploading: !(pub['capture2'] != null && pub['capture2'].isNotEmpty),
                                     ),
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: _buildProofSection(
-                                      title: 'Preuve 18h',
+                                      title: 'Preuve 2',
                                       imageUrl: pub['capture2'],
-                                      onTap: () => _pickCapture(_publications.indexOf(pub), 2),
+                                      onTap: () => _pickCapture(i, 2),
                                       isInitial: false,
+                                      isUploading: (pub['capture1'] != null && pub['capture1'].isNotEmpty)&&(pub['originalStatus'] == 'published'||pub['originalStatus'] == 'submitted'),
                                     ),
                                   ),
                                 ],
@@ -476,8 +905,9 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
                           ),
                         ),
                       );
-                    },
-                  ),
+                              },
+                            ),
+                          ),
           ),
         ],
       ),
@@ -493,6 +923,7 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
     required String? imageUrl,
     required VoidCallback onTap,
     required bool isInitial,
+    bool isUploading = true,
   }) {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -512,16 +943,60 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
             ),
           ),
           const SizedBox(height: 8),
-          if (imageUrl != null)
+          if (imageUrl != null && imageUrl.isNotEmpty)
             Container(
               height: 80,
               width: double.infinity,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(8),
-                image: DecorationImage(
-                  image: NetworkImage(imageUrl),
-                  fit: BoxFit.cover,
-                ),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: imageUrl.startsWith('http') 
+                  ? Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        color: Colors.grey[200],
+                        child: Icon(Icons.broken_image, color: Colors.grey[400], size: 32),
+                      ),
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Container(
+                          color: Colors.grey[200],
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              value: loadingProgress.expectedTotalBytes != null
+                                  ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                  : null,
+                              strokeWidth: 2,
+                            ),
+                          ),
+                        );
+                      },
+                    )
+                  : Image.network(
+                      '${dotenv.env['API_BASE_URL'] ?? 'http://localhost:5000'}$imageUrl',
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        color: Colors.grey[200],
+                        child: Icon(Icons.broken_image, color: Colors.grey[400], size: 32),
+                      ),
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Container(
+                          color: Colors.grey[200],
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              value: loadingProgress.expectedTotalBytes != null
+                                  ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                  : null,
+                              strokeWidth: 2,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
               ),
             )
           else
@@ -539,6 +1014,7 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
               ),
             ),
           const SizedBox(height: 8),
+          if(isUploading)
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
