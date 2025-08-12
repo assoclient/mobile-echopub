@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:mobile/screens/advertiser/advertiser_dashboard.dart';
+import 'package:mobile/screens/advertiser/create_ad_page.dart';
 import 'screens/auth/login_page.dart';
 import 'screens/auth/register_page.dart';
 import 'screens/advertiser/advertiser_home.dart';
@@ -27,6 +29,9 @@ class MyApp extends StatelessWidget {
       routes: {
         '/advertiser': (context) => const AdvertiserHome(),
         '/ambassador': (context) => const AmbassadorHome(),
+        '/advertiser/create-campaign': (context) => const CreateAdPage(),
+        '/advertiser/profile': (context) => const AdvertiserProfilePage(),
+        '/advertiser/dashboard': (context) => const AdvertiserDashboardPage(),
       },
     );
   }

@@ -67,9 +67,10 @@ String _formatDate(dynamic date) {
       );
       if (response.statusCode == 200) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Dépôt soumis !')));
-        Navigator.pop(context, true);
+        Navigator.pushReplacementNamed(context, '/advertiser');
       } else {
-        setState(() { _error = 'Erreur: ${response.statusCode}\n${response.body}'; });
+        final message = jsonDecode(response.body)!['message'];
+        setState(() { _error = 'Erreur: ${response.statusCode} : $message'; });
       }
     } catch (e) {
       setState(() { _error = 'Erreur réseau: $e'; });
@@ -125,10 +126,11 @@ String _formatDate(dynamic date) {
                               Wrap(
                                 spacing: 8,
                                 children: [
-                                  if (ad['cpv'] != null)
-                                    Chip(label: Text('CPV: ${ad['cpv']} FCFA', style: const TextStyle(color: Colors.white)), backgroundColor: Colors.green.shade700),
-                                  if (ad['cpc'] != null)
-                                    Chip(label: Text('CPC: ${ad['cpc']} FCFA', style: const TextStyle(color: Colors.white)), backgroundColor: Colors.orange.shade700),
+                                  const Icon(Icons.flag, size: 18, color: Colors.orange),
+                                 
+                                  if (ad['expected_views'] != null)
+                                    Text('Objectif : ${ad['expected_views']} vues', style: const TextStyle(color: Colors.black,fontWeight: FontWeight.bold)),
+                                 
                                 ],
                               ),
                               const SizedBox(height: 4),
@@ -222,13 +224,13 @@ String _formatDate(dynamic date) {
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _phoneController,
-                  decoration: const InputDecoration(labelText: 'Téléphone (+237...)'),
+                  decoration: const InputDecoration(labelText: 'Téléphone (237...)'),
                   keyboardType: TextInputType.phone,
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Champ requis';
-                    if (!RegExp(r'^\+237[0-9]{9}').hasMatch(v)) return 'Format: +237XXXXXXXXX';
+                    if (!RegExp(r'^237[0-9]{9}').hasMatch(v)) return 'Format: 237XXXXXXXXX';
                     return null;
-                  },
+                  },  
                 ),
                 const SizedBox(height: 24),
                 if (_error != null)

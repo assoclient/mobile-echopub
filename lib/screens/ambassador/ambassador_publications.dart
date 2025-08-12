@@ -77,6 +77,7 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
           
           // Convertir les données du backend au format attendu par l'UI
           final convertedPublications = publications.map<Map<String, dynamic>>((pub) {
+            //debugPrint('pub: $pub');
             return {
               'id': pub['_id'], // ID de l'AmbassadorCampaign
               'campaignId': pub['campaign']?['_id'], // ID de la campagne
@@ -822,7 +823,7 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
                                 ],
                               ),
                               // Stats for validated publications
-                              if (pub['validation'] == 'Validée') ...[
+                             // if (pub['validation'] == 'Validée') ...[
                                 const SizedBox(height: 12),
                                 Container(
                                   padding: const EdgeInsets.all(12),
@@ -866,7 +867,7 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
                                     ],
                                   ),
                                 ),
-                              ],
+                              //],
                               const SizedBox(height: 16),
                               // Proof images section
                               Text(
@@ -945,7 +946,7 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
           const SizedBox(height: 8),
           if (imageUrl != null && imageUrl.isNotEmpty)
             Container(
-              height: 80,
+              height: 250,
               width: double.infinity,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(8),
@@ -955,7 +956,7 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
                 child: imageUrl.startsWith('http') 
                   ? Image.network(
                       imageUrl,
-                      fit: BoxFit.cover,
+                      fit: BoxFit.fill,
                       errorBuilder: (context, error, stackTrace) => Container(
                         color: Colors.grey[200],
                         child: Icon(Icons.broken_image, color: Colors.grey[400], size: 32),

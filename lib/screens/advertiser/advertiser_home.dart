@@ -1,4 +1,8 @@
   import 'package:flutter/material.dart';
+import 'package:mobile/components/advertiser_bottom_nav.dart';
+import 'package:mobile/screens/advertiser/advertiser_dashboard.dart';
+import 'package:mobile/screens/advertiser/advertiser_nav_helper.dart';
+import 'package:mobile/screens/advertiser/advertiser_profile_page.dart';
 import 'package:mobile/services/auth_service.dart';
 import 'package:video_player/video_player.dart';
 import 'package:mobile/theme.dart';
@@ -108,7 +112,7 @@ class _AdvertiserHomeState extends State<AdvertiserHome> {
       final token = await storage.read(key: 'auth_token');
       final user =await  AuthService.getUser();
       final apiUrl = dotenv.env['API_BASE_URL'] ?? 'http://localhost:5000';
-      final url = Uri.parse('$apiUrl/api/campaigns/advertiser/campaigns/${user?['_id']}?page=$_currentPage&pageSize=$_pageSize');
+      final url = Uri.parse('$apiUrl/api/campaigns/my-campaigns?page=$_currentPage&pageSize=$_pageSize');
       final response = await http.get(url, headers: {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
@@ -483,29 +487,31 @@ class _AdvertiserHomeState extends State<AdvertiserHome> {
                     Text('Budget: ${ad['budget']} FCFA', style: const TextStyle(fontSize: 15)),
                   ],
                 ),
-                Row(
+               /*  Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const Icon(Icons.paid, size: 18, color: Colors.deepPurple),
                     const SizedBox(width: 4),
                     Text('Dépensé: ${ad['spent']} FCFA', style: const TextStyle(fontSize: 15)),
                   ],
-                ),
+                ), */
               ],
             ),
             const SizedBox(height: 8),
             Row(
               children: [
+                Icon(Icons.flag, size: 18, color: Colors.orange),
+                const SizedBox(width: 4),
+              
                 if (ad['cpv'] != null)
-                  Chip(
-                    label: Text('CPV: ${ad['cpv']} FCFA', style: const TextStyle(color: Colors.white)),
-                    backgroundColor: Colors.green.shade700,
-                  ),
-                if (ad['cpc'] != null)
+                  Text('Objectif minimum: ${ad['expected_views']} vues', style: const TextStyle(color: Colors.black,fontWeight: FontWeight.bold)),
+                    
+                  
+                /* if (ad['cpc'] != null)
                   Chip(
                     label: Text('CPC: ${ad['cpc']} FCFA', style: const TextStyle(color: Colors.white)),
                     backgroundColor: Colors.orange.shade700,
-                  ),
+                  ), */
               ],
             ),
             const SizedBox(height: 8),
@@ -648,7 +654,7 @@ class _AdvertiserHomeState extends State<AdvertiserHome> {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
+     /*  floatingActionButton: FloatingActionButton(
         backgroundColor: AppColors.primaryBlue,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50)),
         onPressed: () {
@@ -659,8 +665,12 @@ class _AdvertiserHomeState extends State<AdvertiserHome> {
         },
         child: const Icon(Icons.add,color: Colors.white,),
         tooltip: 'Créer une annonce',
-      ),
+      ), */
       // bottomNavigationBar supprimé pour éviter le doublon
+      bottomNavigationBar: AdvertiserBottomNav(
+        currentIndex: 1,
+        onTap: (index) => handleAdvertiserNav(context, 1, index),
+      )
     );
   }
 

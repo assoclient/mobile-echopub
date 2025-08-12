@@ -20,19 +20,22 @@ class _CreateAdPageState extends State<CreateAdPage> {
   final _formKey = GlobalKey<FormState>();
   XFile? _mediaFile;
   String? _mediaType; // 'image' ou 'video'
-  int? _budget=1000;
+  int? _budget=5000;
+  int? _expectedViews=0;
   double? _cpv=10;
   double? _cpc=20;
+  Map<String, dynamic>? _settingsData;
   DateTime? _startDate;
   DateTime? _endDate;
   String? _locationType = 'city';
   List<String> _selectedLocations = [];
   List<Map<String, dynamic>> _cities = [];
   bool _loadingCities = true;
+  bool _loading = false;
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _targetLinkController = TextEditingController();
-  final TextEditingController _regionController = TextEditingController();
+  final TextEditingController _expectedViewsController = TextEditingController();
   final TextEditingController _startDateController = TextEditingController();
   final TextEditingController _endDateController = TextEditingController();
 
@@ -40,8 +43,27 @@ class _CreateAdPageState extends State<CreateAdPage> {
   void initState() {
     super.initState();
     _loadCities();
+    _getSettings();
   }
-
+  Future<void> _getSettings() async {
+    final storage = const FlutterSecureStorage();
+    final token = await storage.read(key: 'auth_token');
+    final settings = await http.get(Uri.parse('${dotenv.env['API_BASE_URL'] ?? 'http://localhost:5000'}/api/settings'),
+    headers: {'Authorization': 'Bearer $token'});
+    final settingsData = json.decode(settings.body);
+    setState(() {
+    _settingsData = settingsData;
+    //debugPrint('Settings: $settingsData');
+     _cpv = (settingsData!['data']['payment']['cpv']).toDouble();
+     _budget = settingsData!['data']['payment']['minCampaignAmount'];
+    });
+   
+   
+    setState(() {
+          _expectedViews = (_budget! / _cpv!).toDouble().floor();
+          _expectedViewsController.text = _expectedViews.toString();
+    });
+  }
   Future<void> _loadCities() async {
     final String data = await rootBundle.loadString('assets/cities_cm.json');
     final List<dynamic> jsonResult = json.decode(data);
@@ -59,10 +81,18 @@ class _CreateAdPageState extends State<CreateAdPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      
       appBar: AppBar(
         title: const Text('Créer une annonce'),
         foregroundColor: Colors.white,
         backgroundColor: AppColors.primaryBlue,
+        leading: IconButton(
+        icon: Icon(Icons.arrow_back),
+        onPressed: () {
+          Navigator.pushReplacementNamed(context, '/advertiser'); // Go back
+        },
+      ),
+        
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
@@ -162,35 +192,45 @@ class _CreateAdPageState extends State<CreateAdPage> {
                       ),
               const SizedBox(height: 12),
               TextFormField(
+                
                 initialValue: _budget?.toString() ?? '',
                 decoration: const InputDecoration(labelText: 'Budget (FCFA)', prefixIcon: Icon(Icons.monetization_on)),
                 keyboardType: TextInputType.number,
                 validator: (v) {
                   if (v == null || v.isEmpty) return 'Champ requis';
                   final n = int.tryParse(v);
-                  if (n == null || n <= 0) return 'Entrez un montant valide';
+                  if (n == null || n < _settingsData!['data']['payment']['minCampaignAmount']||n<=0) return 'Entrez un montant valide';
                   return null;
                 },
-                onSaved: (v) => _budget = int.tryParse(v ?? ''),
+                onSaved: (v) => {
+                  _budget = int.tryParse(v ?? ''),
+                  _expectedViews = (_budget! / _cpv!).toDouble().floor(),
+                  _expectedViewsController.text = _expectedViews.toString(),
+                  },
+                  onChanged: (v) {
+                    
+                    _budget = int.tryParse(v ?? '');
+                    if(_budget != null) {
+                      _expectedViews = (_budget! / _cpv!).toDouble().floor();
+                      _expectedViewsController.text = _expectedViews.toString();
+                    }
+                  },
+                
               ),
               const SizedBox(height: 12),
               Row(
                 children: [
                   Expanded(
                     child: TextFormField(
-                      initialValue: _cpv?.toString() ?? '10' ,
-                      decoration: const InputDecoration(labelText: 'CPV (min 10 FCFA)'),
+                     // initialValue: _expectedViews.toString() ,
+                      decoration: const InputDecoration(labelText: 'Vues attendu'),
                       keyboardType: TextInputType.number,
-                      validator: (v) {
-                        if (v == null || v.isEmpty) return 'Champ requis';
-                        final n = double.tryParse(v);
-                        if (n == null || n < 10) return 'Min 10 FCFA';
-                        return null;
-                      },
-                      onSaved: (v) => _cpv = double.tryParse(v ?? ''),
+                      enabled: false,
+                      controller: _expectedViewsController,
+
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  /* const SizedBox(width: 12),
                   Expanded(
                     child: TextFormField(
                       initialValue: _cpc?.toString() ?? '20',
@@ -204,7 +244,7 @@ class _CreateAdPageState extends State<CreateAdPage> {
                       },
                       onSaved: (v) => _cpc = double.tryParse(v ?? ''),
                     ),
-                  ),
+                  ), */
                 ],
               ),
               const SizedBox(height: 12),
@@ -347,8 +387,9 @@ class _CreateAdPageState extends State<CreateAdPage> {
               ),
               const SizedBox(height: 24),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryBlue),
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryBlue,foregroundColor: Colors.white),
                 onPressed: () async {
+                  setState(() { _loading = true; });
                   if (_formKey.currentState!.validate()) {
                     // Récupérer les valeurs des contrôleurs
                     final _title = _titleController.text;
@@ -400,15 +441,25 @@ class _CreateAdPageState extends State<CreateAdPage> {
 
                     if (response.statusCode == 201 || response.statusCode == 200) {
                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Annonce créée !')));
-                      Navigator.pop(context);
+                       Navigator.pushReplacementNamed(context, '/advertiser');
                     } else {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text('Erreur: ${response.statusCode}\n${response.body}')),
                       );
                     }
                   }
+                  setState(() { _loading = false; });
                 },
-                child: const Text('Créer l\'annonce',style: TextStyle(color: Colors.white),),
+                child: _loading
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text('Créer l\'annonce',style: TextStyle(color: Colors.white),),
               ),
             ],
           ),

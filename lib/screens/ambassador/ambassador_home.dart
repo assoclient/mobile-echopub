@@ -98,7 +98,7 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
         );
         
         // Recharger les campagnes pour mettre à jour les statuts
-        _loadCampaigns();
+        Navigator.push(context, MaterialPageRoute(builder: (context) => AmbassadorPublicationsPage()));
         
       } else {
         final errorData = jsonDecode(response.body);
@@ -267,6 +267,7 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
         final decoded = json.decode(response.body);
         List<dynamic> dataList;
         if (decoded is Map && decoded.containsKey('data')) {
+          debugPrint('dataList: $decoded');
           dataList = decoded['data'] as List<dynamic>;
         } else if (decoded is List) {
           dataList = decoded;
@@ -275,6 +276,7 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
         }
         setState(() {
           _isLoading = false;
+          
           _campaigns = dataList.map<Map<String, dynamic>>((e) {
             // Conversion des dates si besoin
             return {
@@ -291,6 +293,7 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
         });
       }
     } catch (e) {
+      debugPrint('Erreur lors du chargement des campagnes: $e');
       setState(() {
         _isLoading = false;
         _error = 'Erreur réseau ou parsing: $e';
@@ -411,9 +414,10 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
                     itemCount: filteredCampaigns.length,
                     itemBuilder: (context, i) {
                       final c = filteredCampaigns[i];
-                      final campaignId = c['id']?.toString() ?? '';
+                      
+                      final campaignId = c['id']?.toString() ?? c['_id']?.toString()??'';
                       final locationType = c['location_type'];
-                      final locationValue = c['target_location'].map((e) => e['value']).join(', ');
+                      final locationValue = c['target_location'].map((e) => e['value'] ?? '').join(', ');
                       debugPrint('Campaign ID: $campaignId');
                       // Supprimé cpv et cpc car non utilisés
                       final endDate = c['end_date'] is DateTime ? c['end_date'] : null;
@@ -488,7 +492,7 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
                                           borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                                           child: Image.network(
                                             c['media_url'],
-                                            height: 200,
+                                            height: 600,
                                             width: double.infinity,
                                             fit: BoxFit.cover,
                                             errorBuilder: (_, __, ___) => Container(
@@ -574,36 +578,28 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
                                   ),
                                   const SizedBox(height: 16),
                                   // Target Link
-                                  if (c['target_link'] != null)
+                                  if (c['campaign_test'] == true)
                                     Container(
                                       padding: const EdgeInsets.all(12),
                                       decoration: BoxDecoration(
-                                        color: Colors.blue.shade50,
+                                        color: Colors.orange.shade50,
                                         borderRadius: BorderRadius.circular(8),
                                         border: Border.all(color: Colors.blue.shade200),
                                       ),
                                       child: Row(
                                         children: [
-                                          Icon(Icons.link, size: 16, color: Colors.blue.shade700),
+                                          Icon(Icons.warning, size: 16, color: Colors.orange.shade700),
                                           const SizedBox(width: 8),
                                           Expanded(
-                                            child: GestureDetector(
-                                              onTap: () async {
-                                                final url = c['target_link'];
-                                                if (url != null) {
-                                                  // TODO: Utiliser url_launcher pour ouvrir le lien
-                                                }
-                                              },
-                                              child: Text(
-                                                c['target_link'],
+                                             child: Text(
+                                                'Cette campagne est une campagne test, vous devez la publier pour que nous mesurions votre performance et ensuite on pourra vous envoyer des campagnes rémunérées.',
                                                 style: TextStyle(
-                                                  color: Colors.blue.shade700,
-                                                  decoration: TextDecoration.underline,
+                                                  color: Colors.black,
                                                   fontSize: 12,
                                                 ),
-                                                overflow: TextOverflow.ellipsis,
+                                                overflow: TextOverflow.visible,
                                               ),
-                                            ),
+                                            
                                           ),
                                         ],
                                       ),
@@ -622,7 +618,7 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
                                           ),
                                           child: Column(
                                             children: [
-                                              Icon(Icons.remove_red_eye, size: 20, color: Colors.green.shade700),
+                                              Text('Objectif', style: TextStyle(color: Colors.green.shade700,fontWeight: FontWeight.bold)),
                                               const SizedBox(height: 4),
                                               Text(
                                                 '${c['expected_views']} vues',
@@ -647,7 +643,7 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
                                           ),
                                           child: Column(
                                             children: [
-                                              Icon(Icons.monetization_on, size: 20, color: Colors.orange.shade700),
+                                              Text('A gagner', style: TextStyle(color: Colors.orange.shade700,fontWeight: FontWeight.bold)),
                                               const SizedBox(height: 4),
                                               Text(
                                                 '${c['expected_earnings']} FCFA',
@@ -675,11 +671,11 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
                                               color: Colors.blue.shade50,
                                               borderRadius: BorderRadius.circular(8),
                                             ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
+                                          child: Wrap(
+                                              spacing: 4,
+                                              runSpacing: 4,
                                               children: [
-                                                Icon(Icons.location_city, size: 14, color: Colors.blue.shade700),
-                                                const SizedBox(width: 4),
+                                                 Icon(Icons.location_city, size: 14, color: Colors.blue.shade700),
                                                 Text(
                                                   locationValue,
                                                   style: TextStyle(
@@ -887,9 +883,9 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
                                           content += '\n$link';
                                         }
                                         if (files.isNotEmpty) {
-                                          await Share.shareXFiles(files.map((e) => XFile(e)).toList(), text: content, subject: title);
+                                          Share.shareXFiles(files.map((e) => XFile(e)).toList(), text: content, subject: title);
                                         } else {
-                                          await Share.share(content, subject: title);
+                                          Share.share(content, subject: title);
                                         }
                                       },
                                       icon: const Icon(Icons.share, size: 18),

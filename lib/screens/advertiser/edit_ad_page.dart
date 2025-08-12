@@ -25,20 +25,28 @@ class _EditAdPageState extends State<EditAdPage> {
   late TextEditingController _budgetController;
   late TextEditingController _cpvController;
   late TextEditingController _cpcController;
-  late TextEditingController _cityController;
-  late TextEditingController _regionController;
-  late TextEditingController _radiusController;
+  //late TextEditingController _cityController;
+  //late TextEditingController _regionController;
+  //late TextEditingController _radiusController;
   String? _targetType; // 'city', 'region', 'radius'
   String? _format; // 'image', 'video', 'texte'
   DateTime? _startDate;
   DateTime? _endDate;
   String? _mediaUrl;
 List<Map<String, dynamic>> _cities = [];
+String? _locationType = 'city';
+List<String> _selectedLocations = []; 
   bool _loadingCities = true;
+  double? _cpv;
+  double? _budget;
+  Map<String, dynamic>? _settingsData;
+  final TextEditingController _expectedViewsController = TextEditingController();
+  bool _loading = false;
   @override
   void initState() {
     super.initState();
     _loadCities();
+    _getSettings();
     final ad = widget.ad;
     _titleController = TextEditingController(text: ad['title'] ?? '');
     _descriptionController = TextEditingController(text: ad['description'] ?? '');
@@ -46,22 +54,15 @@ List<Map<String, dynamic>> _cities = [];
     _budgetController = TextEditingController(text: ad['budget']?.toString() ?? '');
     _cpvController = TextEditingController(text: ad['cpv']?.toString() ?? '');
     _cpcController = TextEditingController(text: ad['cpc']?.toString() ?? '');
-    _cityController = TextEditingController(
-      text: (ad['target_location'] != null && ad['target_location']['city'] != null)
-          ? ad['target_location']['city']?.toString() ?? ''
-          : '',
-    );
-    _regionController = TextEditingController(
-      text: (ad['target_location'] != null && ad['target_location']['region'] != null)
-          ? ad['target_location']['region']?.toString() ?? ''
-          : '',
-    );
-    _radiusController = TextEditingController(
-      text: (ad['target_location'] != null && ad['target_location']['type'] == 'radius')
-          ? (ad['target_location']['value'] != null ? ad['target_location']['value'].toString() : '')
-          : '',
-    );
-    _targetType = ad['target_location']?['type'] ?? 'city';
+    _locationType = ad['location_type'] ?? 'city';
+    _selectedLocations = (ad['target_location'] is List)
+        ? List<String>.from((ad['target_location'] as List)
+            .where((loc) => loc is Map && loc.containsKey('value'))
+            .map((loc) => loc['value'].toString()))
+        : [];
+    _expectedViewsController.text = ad['expected_views']?.toString() ?? '';
+
+    _targetType = ad['location_type'] ?? 'city';
     _format = ad['format'] ?? 'image';
     _startDate = ad['start_date'] is DateTime
         ? ad['start_date']
@@ -80,14 +81,17 @@ List<Map<String, dynamic>> _cities = [];
     _budgetController.dispose();
     _cpvController.dispose();
     _cpcController.dispose();
-    _cityController.dispose();
-    _regionController.dispose();
+    //  _cityController.dispose();
+    //_regionController.dispose();
+    _expectedViewsController.dispose();
     //_radiusController.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
+    
     if (!_formKey.currentState!.validate()) return;
+    setState(() { _loading = true; });
     try {
       final storage = const FlutterSecureStorage();
       final token = await storage.read(key: 'auth_token');
@@ -103,15 +107,14 @@ List<Map<String, dynamic>> _cities = [];
         request.fields['description'] = _descriptionController.text;
         request.fields['target_link'] = _targetLinkController.text;
         request.fields['budget'] = _budgetController.text;
+        request.fields['location_type'] = _locationType ?? '';
+        request.fields['target_location'] = json.encode(_selectedLocations.map((loc) => {'value': loc}).toList());
         if (_cpvController.text.isNotEmpty) request.fields['cpv'] = _cpvController.text;
         if (_cpcController.text.isNotEmpty) request.fields['cpc'] = _cpcController.text;
         request.fields['format'] = _format ?? '';
         if (_startDate != null) request.fields['start_date'] = _startDate!.toIso8601String();
         if (_endDate != null) request.fields['end_date'] = _endDate!.toIso8601String();
-        request.fields['target_location'] = json.encode({
-          'city': _cityController.text,
-          'region': _regionController.text,
-        });
+        
         request.files.add(await http.MultipartFile.fromPath('media', _pickedMedia!.path));
         var streamed = await request.send();
         response = await http.Response.fromStream(streamed);
@@ -134,10 +137,8 @@ List<Map<String, dynamic>> _cities = [];
           'start_date': _startDate?.toIso8601String(),
           'end_date': _endDate?.toIso8601String(),
           'media_url': _mediaUrl,
-          'target_location': {
-            'city':  _cityController.text,
-            'region': _regionController.text,
-          },
+          'location_type': _locationType,
+          'target_location': _selectedLocations.map((loc) => {'value': loc}).toList(),
         };
         final body = json.encode(data);
         response = await http.put(url,
@@ -156,6 +157,8 @@ List<Map<String, dynamic>> _cities = [];
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $e')));
+    } finally {
+      setState(() { _loading = false; });
     }
   }
  Future<void> _loadCities() async {
@@ -171,6 +174,19 @@ List<Map<String, dynamic>> _cities = [];
       _loadingCities = false;
     });
   }
+  Future<void> _getSettings() async {
+    final storage = const FlutterSecureStorage();
+    final token = await storage.read(key: 'auth_token');
+    final settings = await http.get(Uri.parse('${dotenv.env['API_BASE_URL'] ?? 'http://localhost:5000'}/api/settings'),
+    headers: {'Authorization': 'Bearer $token'});
+    final settingsData = json.decode(settings.body);
+
+    setState(() {
+      _settingsData = settingsData;
+      _cpv = (settingsData!['data']['payment']['cpv']).toDouble();
+    });
+    
+  } 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -222,25 +238,29 @@ List<Map<String, dynamic>> _cities = [];
                       validator: (v) {
                         if (v == null || v.isEmpty) return 'Champ requis';
                         final n = int.tryParse(v);
-                        if (n == null || n <= 0) return 'Entrez un montant valide';
+                        if (n == null ||n < _settingsData!['data']['payment']['minCampaignAmount']||n<=0) return 'Entrez un montant valide';
                         return null;
+                      },
+                      onChanged: (v) {
+                       
+                        if(v != '' ) {
+                           final b = int.tryParse(v);
+                          final expectedViews = (b !/ _cpv!).toDouble().floor();
+                          _expectedViewsController.text = expectedViews.toString();
+                        }
                       },
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: TextFormField(
-                      controller: _cpvController,
-                      decoration: const InputDecoration(labelText: 'CPV (FCFA)'),
+                      controller: _expectedViewsController,
+                      decoration: const InputDecoration(labelText: 'Vues attendu'),
                       keyboardType: TextInputType.number,
-                      validator: (v) {
-                        if (_cpcController.text.isEmpty && (v == null || v.isEmpty)) return 'CPV ou CPC requis';
-                        if (v != null && v.isNotEmpty && int.tryParse(v)! < 10) return 'Min 10 FCFA';
-                        return null;
-                      },
+                      enabled: false,
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  /* const SizedBox(width: 8),
                   Expanded(
                     child: TextFormField(
                       controller: _cpcController,
@@ -252,7 +272,7 @@ List<Map<String, dynamic>> _cities = [];
                         return null;
                       },
                     ),
-                  ),
+                  ), */
                 ],
               ),
               const SizedBox(height: 12),
@@ -267,76 +287,69 @@ List<Map<String, dynamic>> _cities = [];
                 onChanged: (v) => setState(() => _format = v),
                 validator: (v) => v == null ? 'Champ requis' : null,
               ),
-              const SizedBox(height: 12),
-              Row(
+               const SizedBox(height: 12),
+              const Row(
                 children: [
-                  Expanded(
-                    child:_loadingCities
-                  ? const Center(child: CircularProgressIndicator())
-                  : Autocomplete<String>(
-                      optionsBuilder: (TextEditingValue textEditingValue) {
-                        if (textEditingValue.text == '') {
-                          return const Iterable<String>.empty();
-                        }
-                      // Remplacer par la liste des villes de ton projet
-                      final cityNames = _cities.map((city) => city['name'] as String).toList();
-                      return cityNames.where((option) => option.toLowerCase().contains(textEditingValue.text.toLowerCase()));
-                      },
-                      fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-                        controller.text = _cityController.text;
-                        return TextFormField(
-                          controller: controller,
-                          focusNode: focusNode,
-                          decoration: const InputDecoration(labelText: 'Ville'),
-                          enabled: true,
-                          validator: (v) => v == null || v.isEmpty ? 'Champ requis' : null,
-                          onChanged: (v) {
-                            debugPrint('Ville sélectionnée: $v');
-                            final match = _cities.firstWhere(
-                              (city) => (city['name'] as String).toLowerCase() == (v ?? '').toLowerCase(),
-                              orElse: () => {},
-                            );
-                            debugPrint('Match trouvé: $match');
-                            if (match.isNotEmpty) {
-                              _cityController.text = v ?? '';
-                              _regionController.text = match['region'] ?? '';
-                            } else {
-                              _cityController.text = '';
-                              _regionController.text = '';
-                            }
-                          },
-                        );
-                      },
-                      onSelected: (String selection) {
-                        setState(() {
-                          _cityController.text = selection;
-                          // Optionnel : auto-remplir la région si la ville est sélectionnée
-                        });
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _regionController,
-                      decoration: const InputDecoration(labelText: 'Région'),
-                      enabled: false, // La région est auto-remplie
-                      validator: (v) => _targetType == 'region' && (v == null || v.isEmpty) ? 'Champ requis' : null,
-                    ),
-                  ),
-                 /*  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _radiusController,
-                      decoration: const InputDecoration(labelText: 'Rayon (km)'),
-                      enabled: true,
-                      keyboardType: TextInputType.number,
-                      validator: (v) => _targetType == 'radius' && (v == null || v.isEmpty) ? 'Champ requis' : null,
-                    ),
-                  ), */
+                  Icon(Icons.location_on, color: Colors.red),
+                  SizedBox(width: 8),
+                  Text('Ciblage géographique', style: TextStyle(fontWeight: FontWeight.bold)),
                 ],
               ),
               const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                value: _locationType,
+                decoration: const InputDecoration(labelText: 'Type de ciblage'),
+                items: const [
+                  DropdownMenuItem(value: 'city', child: Text('Ville(s)')),
+                  DropdownMenuItem(value: 'region', child: Text('Région(s)')),
+                ],
+                onChanged: (v) {
+                  setState(() {
+                    _locationType = v;
+                    _selectedLocations.clear();
+                  });
+                },
+                validator: (v) => v == null ? 'Champ requis' : null,
+              ),
+              const SizedBox(height: 8),
+              _loadingCities
+                  ? const Center(child: CircularProgressIndicator())
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Sélectionnez ${_locationType == 'city' ? 'les villes' : 'les régions'} :'),
+                        Container(
+                          constraints: const BoxConstraints(maxHeight: 180),
+                          child: SingleChildScrollView(
+                            child: Wrap(
+                              spacing: 8,
+                              children: (_locationType == 'city'
+                                  ? _cities.map((city) => city['name'] as String).toSet().toList()
+                                  : _cities.map((city) => city['region'] as String).toSet().toList())
+                                  .map((loc) => FilterChip(
+                                        label: Text(loc),
+                                        selected: _selectedLocations.contains(loc),
+                                        onSelected: (selected) {
+                                          setState(() {
+                                            if (selected) {
+                                              _selectedLocations.add(loc);
+                                            } else {
+                                              _selectedLocations.remove(loc);
+                                            }
+                                          });
+                                        },
+                                      ))
+                                  .toList(),
+                            ),
+                          ),
+                        ),
+                        if (_selectedLocations.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 4),
+                            child: Text('Sélectionnez au moins une valeur.', style: TextStyle(color: Colors.red)),
+                          ),
+                      ],
+                    ),
              /*  DropdownButtonFormField<String>(
                 value: _targetType,
                 decoration: const InputDecoration(labelText: 'Type de ciblage'),
@@ -466,10 +479,24 @@ List<Map<String, dynamic>> _cities = [];
               ),
               const SizedBox(height: 12),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryBlue,foregroundColor: Colors.white  ),
-                onPressed: _submit,
-                child: const Text('Enregistrer les modifications'),
-              ),
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primaryBlue,
+                        foregroundColor: Colors.white),
+                    onPressed: _loading
+                        ? null
+                        : _submit,
+                    child: _loading
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text('Enregistrer les modifications'),
+                  )
+                
             ],
           ),
         ),

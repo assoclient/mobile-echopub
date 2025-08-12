@@ -2,6 +2,10 @@ import '../../components/ambassador_bottom_nav.dart';
 import 'ambassador_nav_helper.dart';
 import 'package:flutter/material.dart';
 import '../../theme.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class AmbassadorGainsPage extends StatefulWidget {
   const AmbassadorGainsPage({Key? key}) : super(key: key);
@@ -11,57 +15,327 @@ class AmbassadorGainsPage extends StatefulWidget {
 }
 
 class _AmbassadorGainsPageState extends State<AmbassadorGainsPage> {
-  double _solde = 15000.0;
-  List<Map<String, dynamic>> _transactions = [
-    {'type': 'gain', 'label': 'Campagne Pizza Hut', 'montant': 5000.0, 'date': DateTime.now().subtract(const Duration(days: 1))},
-    {'type': 'gain', 'label': 'Campagne Orange Money', 'montant': 10000.0, 'date': DateTime.now().subtract(const Duration(days: 2))},
-    {'type': 'retrait', 'montant': 8000.0, 'date': DateTime.now().subtract(const Duration(days: 3))},
-  ];
-  int _totalVues = 120 + 0; // À remplacer par la somme réelle des vues
-  int _totalPublications = 2; // À remplacer par le nombre réel de publications
+  final _storage = const FlutterSecureStorage();
+  bool _isLoading = true;
+  bool _isRefreshing = false;
+  bool _isLoadingMore = false;
+  
+  double _solde = 0.0;
+  double _totalEarnings = 0.0;
+  double _totalWithdrawn = 0.0;
+  List<Map<String, dynamic>> _transactions = [];
+  int _totalVues = 0;
+  int _totalPublications = 0;
+  
+  // Pagination
+  int _currentPage = 1;
+  int _pageSize = 10;
+  int _totalPages = 1;
+  bool _hasNextPage = false;
+  
+  final ScrollController _scrollController = ScrollController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _amountController = TextEditingController();
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  @override
+  void initState() {
+    super.initState();
+    _loadGainsData();
+    _setupScrollListener();
+    _phoneController.text = '237';
+  }
 
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _setupScrollListener() {
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent * 0.8) {
+        if (_hasNextPage && !_isLoadingMore && !_isLoading) {
+          _loadMoreTransactions();
+        }
+      }
+    });
+  }
+
+  Future<void> _loadGainsData() async {
+    if (!_isRefreshing) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
+
+    try {
+      // Charger les statistiques de gains
+      await _loadGainsStats();
+      
+      // Charger la première page des transactions
+      _currentPage = 1;
+      await _loadTransactions(reset: true);
+      
+    } catch (e) {
+      debugPrint('Erreur lors du chargement des gains: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur lors du chargement des données: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isRefreshing = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadGainsStats() async {
+    final token = await _storage.read(key: 'auth_token');
+    if (token == null) {
+      throw Exception('Token non trouvé');
+    }
+
+    final baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://10.0.2.2:5000';
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/dashboard/ambassador-gains'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      if (data['success']) {
+        final gainsData = data['data'];
+        setState(() {
+          _solde = (gainsData['solde'] ?? 0).toDouble();
+          _amountController.text = _solde.toString();
+          _totalEarnings = (gainsData['totalEarnings'] ?? 0).toDouble();
+          _totalWithdrawn = (gainsData['totalWithdrawn'] ?? 0).toDouble();
+          _totalVues = gainsData['totalVues'] ?? 0;
+          _totalPublications = gainsData['totalPublications'] ?? 0;
+        });
+      }
+    } else {
+      throw Exception('Erreur ${response.statusCode}: ${response.body}');
+    }
+  }
+
+  Future<void> _loadTransactions({bool reset = false}) async {
+    final token = await _storage.read(key: 'auth_token');
+    if (token == null) {
+      throw Exception('Token non trouvé');
+    }
+
+    final baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://10.0.2.2:5000';
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/dashboard/ambassador-transactions?page=$_currentPage&pageSize=$_pageSize'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      if (data['success']) {
+        debugPrint('data: $data');
+        final newTransactions = (data['data'] as List? ?? [])
+            .map((tx) => {
+              'type': tx['type'],
+              'label': tx['label'],
+              'montant': (tx['amount'] ?? 0).toDouble(),
+              'date': DateTime.parse(tx['createdAt']),
+              'status': tx['status'],
+              'campaignId': tx['campaign']?['_id'],
+              'publicationId': tx['campaign']?['_id'],
+              'transactionId': tx['transactionId'],
+            })
+            .toList();
+
+        final pagination = data['pagination'];
+        setState(() {
+          if (reset) {
+            _transactions = newTransactions;
+          } else {
+            _transactions.addAll(newTransactions);
+          }
+          _totalPages = pagination['totalPages'] ?? 1;
+          _hasNextPage = pagination['hasNext'] ?? false;
+        });
+      }
+    } else {
+      throw Exception('Erreur ${response.statusCode}: ${response.body}');
+    }
+  }
+
+  Future<void> _loadMoreTransactions() async {
+    if (!_hasNextPage || _isLoadingMore) return;
+
+    setState(() {
+      _isLoadingMore = true;
+    });
+
+    try {
+      _currentPage++;
+      await _loadTransactions();
+    } catch (e) {
+      debugPrint('Erreur lors du chargement des transactions: $e');
+      _currentPage--; // Revert page increment on error
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingMore = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _refreshData() async {
+    setState(() {
+      _isRefreshing = true;
+    });
+    await _loadGainsData();
+  }
  
   void _retirerGains() {
+    if (_solde <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Aucun gain disponible pour retrait.'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+      return;
+    }
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Retrait de gains', style: TextStyle(fontWeight: FontWeight.w600)),
-        content: Text('Votre solde actuel est de ${_solde.toStringAsFixed(0)} FCFA. Voulez-vous retirer vos gains ?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Annuler', style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              setState(() {
-                if (_solde > 0) {
-                  _transactions.add({'type': 'retrait', 'montant': _solde, 'date': DateTime.now()});
-                }
-                _solde = 0;
-                _transactions.removeWhere((tx) => tx['type'] == 'gain');
-              });
+        title: const Text('Demande de retrait', style: TextStyle(fontWeight: FontWeight.w600)),
+        content: Form(
+          key: _formKey,
+          child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text('Votre solde actuel est de ${_solde.toStringAsFixed(0)} FCFA.'),
+            const SizedBox(height: 4),
+            const Text(
+              'En confirmant, une demande de retrait sera créée et soumise pour validation.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 4),
+            TextFormField(
+              
+              controller: _phoneController,
+              validator:(v) {
+                    if (v == null || v.isEmpty) return 'Champ requis';
+                    if (!RegExp(r'^237[0-9]{9}').hasMatch(v)) return 'Format: 237XXXXXXXXX';
+                    return null;
+                  },
+              decoration: const InputDecoration(labelText: 'Numéro de téléphone',hintText: '237XXXXXXXXX'),
+            ),
+            const SizedBox(height: 4),
+            TextFormField(
+              controller: _amountController,
+              keyboardType: TextInputType.number,
+              validator: (v) {
+                    if (v == null || v.isEmpty) return 'Champ requis';
+                    if (double.tryParse(v) == null) return 'Entrez un montant valide';
+                    if (double.tryParse(v)! > _solde) return 'Le montant demandé est supérieur à votre solde';
+                    return null;
+                  },
+              decoration: const InputDecoration(labelText: 'Montant'),
+            ),
+            const SizedBox(height: 4),
+            ElevatedButton(
+            onPressed: () async {
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text('Retrait effectué avec succès.'),
-                  backgroundColor: AppColors.primaryBlue,
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-              );
+              await _requestWithdrawal();
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryBlue,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
-            child: const Text('Retirer'),
+            child: const Text('Demander le retrait'),
           ),
+          ],
+        )),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Annuler', style: TextStyle(color: Colors.grey)),
+          ),
+          
         ],
       ),
     );
+  }
+
+  Future<void> _requestWithdrawal() async {
+    try {
+      final token = await _storage.read(key: 'auth_token');
+      if (token == null) {
+        throw Exception('Token non trouvé');
+      }
+
+      final baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://10.0.2.2:5000';
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/transactions/withdraw'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'amount': _amountController.text,
+          'type': 'withdrawal',
+          'phone': _phoneController.text,
+        }),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        if (data['success']) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Demande de retrait soumise avec succès !'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          );
+          // Recharger les données pour refléter la nouvelle transaction
+          await _loadGainsData();
+        }
+      } else {
+        throw Exception('Erreur lors de la demande de retrait');
+      }
+    } catch (e) {
+      debugPrint('Erreur lors de la demande de retrait: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erreur lors de la demande de retrait: $e'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+    }
   }
 
   @override
@@ -82,8 +356,30 @@ class _AmbassadorGainsPageState extends State<AmbassadorGainsPage> {
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
         ),
+        actions: [
+          IconButton(
+            onPressed: _isLoading ? null : _refreshData,
+            icon: _isRefreshing 
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                )
+              : const Icon(Icons.refresh, color: Colors.white),
+            tooltip: 'Actualiser',
+          ),
+        ],
       ),
-      body: Column(
+      body: _isLoading 
+        ? const Center(
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryBlue),
+            ),
+          )
+        : Column(
         children: [
           // Balance Card
           Container(
@@ -299,9 +595,20 @@ class _AmbassadorGainsPageState extends State<AmbassadorGainsPage> {
                     ),
                     Expanded(
                       child: ListView.builder(
+                        controller: _scrollController,
                         padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: sortedTx.length,
+                        itemCount: sortedTx.length + (_isLoadingMore ? 1 : 0),
                         itemBuilder: (context, index) {
+                          // Indicateur de chargement en bas
+                          if (index == sortedTx.length) {
+                            return Container(
+                              padding: const EdgeInsets.all(16),
+                              alignment: Alignment.center,
+                              child: const CircularProgressIndicator(
+                                valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryBlue),
+                              ),
+                            );
+                          }
                           final tx = sortedTx[index];
                           return Container(
                             margin: const EdgeInsets.only(bottom: 12),
@@ -324,16 +631,16 @@ class _AmbassadorGainsPageState extends State<AmbassadorGainsPage> {
                                   Container(
                                     padding: const EdgeInsets.all(12),
                                     decoration: BoxDecoration(
-                                      color: tx['type'] == 'gain'
+                                      color: tx['type'] == 'payment'
                                           ? Colors.green.shade50
                                           : Colors.red.shade50,
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Icon(
-                                      tx['type'] == 'gain'
+                                      tx['type'] == 'payment'
                                           ? Icons.trending_up
                                           : Icons.arrow_downward,
-                                      color: tx['type'] == 'gain'
+                                      color: tx['type'] == 'payment'
                                           ? Colors.green.shade700
                                           : Colors.red.shade700,
                                       size: 24,
@@ -346,7 +653,9 @@ class _AmbassadorGainsPageState extends State<AmbassadorGainsPage> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          tx['type'] == 'gain' ? tx['label'] : 'Retrait',
+                                          tx['type'] == 'payment' 
+                                            ? (tx['label'] ?? 'Gain de campagne')
+                                            :tx['type'] == 'withdrawal' ? 'Demande de retrait' : 'Divers',
                                           style: const TextStyle(
                                             fontWeight: FontWeight.w600,
                                             fontSize: 16,
@@ -371,6 +680,37 @@ class _AmbassadorGainsPageState extends State<AmbassadorGainsPage> {
                                             ),
                                           ],
                                         ),
+                                        // Afficher le statut pour les retraits
+                                        if (tx['type'] == 'withdrawal' && tx['status'] != null) ...[
+                                          const SizedBox(height: 4),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: tx['status'] == 'confirmed' 
+                                                ? Colors.green.shade50
+                                                : tx['status'] == 'pending'
+                                                  ? Colors.orange.shade50
+                                                  : Colors.red.shade50,
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            child: Text(
+                                              tx['status'] == 'confirmed' 
+                                                ? 'Confirmé'
+                                                : tx['status'] == 'pending'
+                                                  ? 'En attente'
+                                                  : 'Rejeté',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                color: tx['status'] == 'confirmed' 
+                                                  ? Colors.green.shade700
+                                                  : tx['status'] == 'pending'
+                                                    ? Colors.orange.shade700
+                                                    : Colors.red.shade700,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ],
                                     ),
                                   ),
@@ -379,11 +719,11 @@ class _AmbassadorGainsPageState extends State<AmbassadorGainsPage> {
                                     crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
                                       Text(
-                                        (tx['type'] == 'gain' ? '+' : '-') +
+                                        (tx['type'] == 'payment' ? '+' : '-') +
                                             (tx['montant'] as double).toStringAsFixed(0) +
                                             ' FCFA',
                                         style: TextStyle(
-                                          color: tx['type'] == 'gain'
+                                          color: tx['type'] == 'payment'
                                               ? Colors.green.shade700
                                               : Colors.red.shade700,
                                           fontWeight: FontWeight.bold,
@@ -394,15 +734,15 @@ class _AmbassadorGainsPageState extends State<AmbassadorGainsPage> {
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                         decoration: BoxDecoration(
-                                          color: tx['type'] == 'gain'
+                                          color: tx['type'] == 'payment'
                                               ? Colors.green.shade50
                                               : Colors.red.shade50,
                                           borderRadius: BorderRadius.circular(8),
                                         ),
                                         child: Text(
-                                          tx['type'] == 'gain' ? 'Gain' : 'Retrait',
+                                        tx['type'] == 'payment' ? 'Gain' : 'Retrait',
                                           style: TextStyle(
-                                            color: tx['type'] == 'gain'
+                                            color: tx['type'] == 'payment'
                                                 ? Colors.green.shade700
                                                 : Colors.red.shade700,
                                             fontSize: 12,
@@ -419,6 +759,20 @@ class _AmbassadorGainsPageState extends State<AmbassadorGainsPage> {
                         },
                       ),
                     ),
+                    // Indicateur "Fin des transactions" quand toutes sont chargées
+                    if (!_hasNextPage && _transactions.isNotEmpty && !_isLoading)
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        alignment: Alignment.center,
+                        child: Text(
+                          'Toutes les transactions ont été chargées',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 12,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
                   ],
                 );
               },

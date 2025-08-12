@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:mobile/components/advertiser_bottom_nav.dart';
+import 'package:mobile/components/custom_bottom_nav_bar.dart';
+import 'package:mobile/screens/advertiser/advertiser_home.dart';
+import 'package:mobile/screens/advertiser/advertiser_nav_helper.dart';
+import 'package:mobile/screens/auth/login_page.dart';
 import 'package:mobile/services/auth_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:mobile/theme.dart';
@@ -67,6 +72,8 @@ class _AdvertiserProfilePageState extends State<AdvertiserProfilePage> {
             onPressed: () {
               Navigator.pop(context);
               AuthService.clear();
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const LoginPage()));
+
               // TODO: Rediriger vers la page de connexion
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
@@ -271,7 +278,7 @@ class _AdvertiserProfilePageState extends State<AdvertiserProfilePage> {
                           ),
                           const SizedBox(height: 16),
                           // Account Information Card
-                          Container(
+                         /*  Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(20),
                             decoration: BoxDecoration(
@@ -315,14 +322,14 @@ class _AdvertiserProfilePageState extends State<AdvertiserProfilePage> {
                                 ],
                               ],
                             ),
-                          ),
+                          ), */
                           const SizedBox(height: 24),
                           // Logout Button
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton.icon(
                               onPressed: _deconnexion,
-                              icon: const Icon(Icons.logout, size: 20),
+                              icon: const Icon(Icons.logout, size: 20,color: Colors.white,),
                               label: const Text(
                                 'Se déconnecter',
                                 style: TextStyle(fontWeight: FontWeight.w600),
@@ -339,6 +346,11 @@ class _AdvertiserProfilePageState extends State<AdvertiserProfilePage> {
                         ],
                       ),
                     ),
+                    bottomNavigationBar: AdvertiserBottomNav(
+                      currentIndex: 3,
+                      onTap: (index) => handleAdvertiserNav(context, 3, index),
+                    ),
+                     
     );
   }
 

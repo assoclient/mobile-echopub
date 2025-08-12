@@ -4,6 +4,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:convert';
 
+import 'package:mobile/theme.dart';
+
 class AdDetailsPage extends StatefulWidget {
   final String campaignId;
   const AdDetailsPage({Key? key, required this.campaignId}) : super(key: key);
@@ -61,6 +63,8 @@ class _AdDetailsPageState extends State<AdDetailsPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Détails de l\'annonce'),
+        backgroundColor: AppColors.primaryBlue,
+        foregroundColor: Colors.white,
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -87,7 +91,7 @@ class _AdDetailsPageState extends State<AdDetailsPage> {
                             ],
                           ),
                           const SizedBox(height: 16),
-                          const Text('Publications', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                          Text('Toutes les publications(${_publications.length})', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                           const SizedBox(height: 8),
                           ..._publications.map((pub) => Card(
                                 margin: const EdgeInsets.symmetric(vertical: 8),
@@ -100,30 +104,42 @@ class _AdDetailsPageState extends State<AdDetailsPage> {
                                       const SizedBox(height: 4),
                                       Row(
                                         children: [
-                                          Chip(label: Text('Vues: ${pub['views'] ?? 0}')),
+                                          Icon(Icons.remove_red_eye, size: 18, color: Colors.blue.shade700),
                                           const SizedBox(width: 8),
-                                          Chip(label: Text('Clics: ${pub['clicks'] ?? 0}')),
+                                          Text('Vues: ${pub['views'] ?? 0}'),
+                                          const SizedBox(width: 8),
+                                          Icon(Icons.touch_app, size: 18, color: Colors.green.shade700),
+                                          const SizedBox(width: 8),
+                                          Text('Clics: ${pub['clicks'] ?? 0}'),
                                         ],
                                       ),
                                       const SizedBox(height: 8),
-                                      if (pub['proof1'] != null)
-                                        Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                     
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          crossAxisAlignment: CrossAxisAlignment.center,
                                           children: [
-                                            const Text('Preuve 1:'),
-                                            const SizedBox(height: 4),
-                                            Image.network(pub['proof1'], height: 120, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image)),
+                                             if (pub['proof1'] != null)
+                                            Column(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                             children: [
+                                              const Text('Capture 1:'),
+                                             
+                                              Image.network(pub['proof1'], height: 280, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image)),
+                                             ],
+                                            ),
+                                            if (pub['proof2'] != null)
+                                              Column(
+                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                children: [
+                                                  const Text('Capture 2:'),
+                                                  const SizedBox(height: 4),
+                                                  Image.network(pub['proof2'], height: 280, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image)),
+                                                ],
+                                              )
                                           ],
                                         ),
-                                      if (pub['proof2'] != null)
-                                        Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            const Text('Preuve 2:'),
-                                            const SizedBox(height: 4),
-                                            Image.network(pub['proof2'], height: 120, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image)),
-                                          ],
-                                        ),
+                                      
                                     ],
                                   ),
                                 ),
