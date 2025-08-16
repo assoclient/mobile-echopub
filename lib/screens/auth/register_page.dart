@@ -21,7 +21,13 @@ class RegisterPage extends StatefulWidget {
 class _RegisterPageState extends State<RegisterPage> {
   bool _isLoading = false;
   String? _apiError;
-
+@override
+  void initState() {
+    super.initState();
+    _whatsappController.text = '';
+    _countryDialCode='+237';
+    _detectLocation();
+  }
   Future<void> _register(Map<String, dynamic> completeData) async {
     setState(() {
       _isLoading = true;
@@ -75,6 +81,8 @@ class _RegisterPageState extends State<RegisterPage> {
       'email': _email,
       'password': _password,
       'role': _role,
+      'ageRange': _ageRange,
+      'gender': _gender,
       'phone': _role == 'advertiser' ? _phoneController.text : null,
       'whatsapp_number': _role == 'ambassador' ? _whatsappController.text : null,
       'location': {
@@ -105,6 +113,9 @@ class _RegisterPageState extends State<RegisterPage> {
   final TextEditingController _whatsappController = TextEditingController();
   final TextEditingController _cityController = TextEditingController();
   final TextEditingController _regionController = TextEditingController();
+  final TextEditingController _ageRangeController = TextEditingController();
+  final TextEditingController _genderController = TextEditingController();
+  String? _ageRange, _gender;
   double? _lat, _lng;
   String? _locationError;
   String _countryDialCode = '+237'; // Par défaut Cameroun
@@ -129,8 +140,8 @@ class _RegisterPageState extends State<RegisterPage> {
       debugPrint("Localisation détectée: ${place.isoCountryCode}",);
         setState(() {
           _cityController.text = place.locality ?? '';
-          _regionController.text = place.administrativeArea ?? '';
-          _countryDialCode = getDialCodeFromCountry(place.isoCountryCode);
+          _regionController.text = place.administrativeArea!.replaceAll("Région du", '') ?? '';
+          //_countryDialCode = getDialCodeFromCountry(place.isoCountryCode);
         });
       }
     } catch (e) {
@@ -140,9 +151,12 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   // Utilise maintenant getDialCodeFromCountry du fichier utils/country_dial_codes.dart
-
   @override
   Widget build(BuildContext context) {
+    setState(() {
+    _countryDialCode='CM';
+  });
+  
     return Scaffold(
       backgroundColor: AppColors.white,
       body: SafeArea(
@@ -228,6 +242,7 @@ class _RegisterPageState extends State<RegisterPage> {
                  // const SizedBox(height: 16),
                   
                   if (_role == 'ambassador') ...[
+                    
                    // const SizedBox(height: 16),
                     IntlPhoneField(
                       controller: _whatsappController,
@@ -237,7 +252,7 @@ class _RegisterPageState extends State<RegisterPage> {
                         prefixIcon: Icon(Icons.chat, color: AppColors.primaryBlue),
                       ),
                       onChanged: (phone) => {
-                        
+                         debugPrint("phone: ${phone.countryCode}"),
                           setState(() {
                           _countryDialCode = phone.countryCode;
                           })
@@ -251,7 +266,56 @@ class _RegisterPageState extends State<RegisterPage> {
                       },
                       disableLengthCheck: false,
                     ),
-                    
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField(
+                      value: _ageRange,
+                      onChanged: (String? value) {
+                        setState(() {
+                          _ageRange = value;
+                        });
+                      },
+                      decoration: InputDecoration(
+                        labelText: 'Tranche d\'âge',
+                        prefixIcon: Icon(Icons.person, color: AppColors.primaryBlue),
+                      ),  
+                      validator: (v) => v == null || v.isEmpty ? 'Champ requis' : null,
+                      onSaved: (v) => _ageRange = v,
+                      items: ['18-25', '26-35', '36-45', '46-55', '56+'].map((String value) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(value, style: TextStyle(color: AppColors.primaryBlue,fontSize: 12)),
+                        );
+                      }).toList(),
+                      style: TextStyle(color: AppColors.primaryBlue,fontSize: 12),
+                      dropdownColor: AppColors.white,
+                      iconEnabledColor: AppColors.primaryBlue,
+                      iconDisabledColor: AppColors.primaryBlue,
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField(
+                      value: _gender,
+                      onChanged: (String? value) {
+                        setState(() {
+                          _gender = value;
+                        });
+                      },
+                      decoration: InputDecoration(
+                        labelText: 'Sexe',
+                        prefixIcon: Icon(Icons.person, color: AppColors.primaryBlue),
+                      ),  
+                      validator: (v) => v == null || v.isEmpty ? 'Champ requis' : null,
+                      onSaved: (v) => _gender = v,
+                      items: ['M', 'F'].map((String value) {
+                          return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(value, style: TextStyle(color: AppColors.primaryBlue)),
+                        );
+                      }).toList(),
+                      style: TextStyle(color: AppColors.primaryBlue),
+                      dropdownColor: AppColors.white,
+                      iconEnabledColor: AppColors.primaryBlue,
+                      iconDisabledColor: AppColors.primaryBlue,
+                    ),
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _cityController,
@@ -341,6 +405,8 @@ class _RegisterPageState extends State<RegisterPage> {
                                     'password': _password,
                                     'role': _role,
                                     'phone': _phoneController.text,
+                                    'ageRange': _ageRange,
+                                    'gender': _gender,
                                     'location': {
                                       'countryCode': _countryDialCode,
                                       'city': null,

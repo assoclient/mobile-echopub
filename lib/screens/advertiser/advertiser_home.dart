@@ -53,6 +53,7 @@ class _AdvertiserHomeState extends State<AdvertiserHome> {
   int _currentPage = 1;
   int _pageSize = 10;
   int _totalCount = 0;
+  String _searchQuery = '';
   final ScrollController _scrollController = ScrollController();
 
   List<Map<String, dynamic>> get _ads {
@@ -112,7 +113,7 @@ class _AdvertiserHomeState extends State<AdvertiserHome> {
       final token = await storage.read(key: 'auth_token');
       final user =await  AuthService.getUser();
       final apiUrl = dotenv.env['API_BASE_URL'] ?? 'http://localhost:5000';
-      final url = Uri.parse('$apiUrl/api/campaigns/my-campaigns?page=$_currentPage&pageSize=$_pageSize');
+      final url = Uri.parse('$apiUrl/api/campaigns/my-campaigns?page=$_currentPage&pageSize=$_pageSize&search=$_searchQuery');
       final response = await http.get(url, headers: {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
@@ -216,10 +217,13 @@ class _AdvertiserHomeState extends State<AdvertiserHome> {
                       isDense: true,
                       contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
                     ),
-                    onChanged: (_) => setState(() {}),
+                    onChanged: (v) => setState(() {
+                      _searchQuery = v.trim().toLowerCase();
+                      _fetchAds(reset: true);
+                    }),
                   ),
                 ),
-                const SizedBox(width: 8),
+                /* const SizedBox(width: 8),
                 InkWell(
                   borderRadius: BorderRadius.circular(8),
                   onTap: () async {
@@ -268,7 +272,7 @@ class _AdvertiserHomeState extends State<AdvertiserHome> {
                       ],
                     ),
                   ),
-                ),
+                ), */
               ],
             ),
             const SizedBox(height: 12),
@@ -363,7 +367,7 @@ class _AdvertiserHomeState extends State<AdvertiserHome> {
               Builder(
                 builder: (context) {
                   final url = ad['media_url'].toString();
-                  if (url.endsWith('.mp4')) {
+                  if (url.endsWith('.mp4') || url.endsWith('.webm') || url.endsWith('.avi') || url.endsWith('.mov')) {
                     return FutureBuilder<VideoPlayerController>(
                       future: _getVideoController(i, url),
                       builder: (context, snapshot) {

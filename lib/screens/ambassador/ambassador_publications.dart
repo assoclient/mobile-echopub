@@ -2,6 +2,7 @@ import '../../components/ambassador_bottom_nav.dart';
 import 'ambassador_nav_helper.dart';
 import 'package:flutter/material.dart';
 import 'dart:io';
+import 'dart:async';
 import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
@@ -22,18 +23,38 @@ class AmbassadorPublicationsPage extends StatefulWidget {
 class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage> {
   List<Map<String, dynamic>> _publications = [];
   bool _isLoading = true;
+  bool _isLoadingMore = false;
   String? _error;
   String _search = '';
   DateTime? _dateStart;
   DateTime? _dateEnd;
   int _currentPage = 1;
+  int _pageSize = 10;
   int _totalCount = 0;
   bool _hasMore = true;
+  
+  // Scroll controller pour la pagination
+  final ScrollController _scrollController = ScrollController();
+  
+  // Recherche avec debounce
+  Timer? _searchDebounce;
+  String _lastSearchQuery = '';
 
   @override
   void initState() {
     super.initState();
     _loadPublications();
+    _setupScrollListener();
+  }
+  
+  void _setupScrollListener() {
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+        if (!_isLoadingMore && _hasMore) {
+          _loadMorePublications();
+        }
+      }
+    });
   }
 
   Future<void> _loadPublications({bool refresh = false}) async {
@@ -56,7 +77,7 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
       }
 
       final apiUrl = dotenv.env['API_BASE_URL'] ?? 'http://localhost:5000';
-      final url = Uri.parse('$apiUrl/api/ambassador-publications/my-publications?page=$_currentPage&pageSize=10');
+      final url = Uri.parse('$apiUrl/api/ambassador-publications/my-publications?page=$_currentPage&pageSize=$_pageSize&search=$_search');
       
       final response = await http.get(
         url,
@@ -73,7 +94,7 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
         setState(() {
           _isLoading = false;
           _totalCount = data['totalCount'] ?? 0;
-          _hasMore = publications.length >= 10; // Si on a reçu 10 éléments, il y en a peut-être plus
+          _hasMore = publications.length >= _pageSize; // Utiliser la taille de page configurable
           
           // Convertir les données du backend au format attendu par l'UI
           final convertedPublications = publications.map<Map<String, dynamic>>((pub) {
@@ -99,7 +120,9 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
             _publications.addAll(convertedPublications);
           }
           
-          _currentPage++;
+          if (!refresh) {
+            _currentPage++;
+          }
         });
       } else {
         throw Exception('Erreur serveur: ${response.statusCode}');
@@ -151,6 +174,30 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
       default:
         return 'En attente';
     }
+  }
+  
+  void _onSearchChanged(String query) {
+    _search = query;
+    
+    // Annuler le timer précédent
+    _searchDebounce?.cancel();
+    
+    // Démarrer un nouveau timer
+    _searchDebounce = Timer(const Duration(milliseconds: 500), () {
+      if (_search != _lastSearchQuery) {
+        _lastSearchQuery = _search;
+        _resetPagination();
+        _loadPublications(refresh: true);
+      }
+    });
+  }
+  
+  void _resetPagination() {
+    setState(() {
+      _currentPage = 1;
+      _publications.clear();
+      _hasMore = true;
+    });
   }
 
   Future<void> _pickCapture(int index, int captureNum) async {
@@ -335,7 +382,7 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
             Text('Voulez-vous utiliser cette capture comme ${captureNum == 1 ? "première" : "deuxième"} preuve ?'),
             const SizedBox(height: 16),
             Container(
-              height: 200,
+              height: 300,
               width: double.infinity,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(8),
@@ -489,13 +536,69 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
   }
 
   Future<void> _loadMorePublications() async {
-    if (!_hasMore || _isLoading) return;
+    if (!_hasMore || _isLoadingMore) return;
     
     setState(() {
-      _isLoading = true;
+      _isLoadingMore = true;
     });
     
-    await _loadPublications();
+    try {
+      await _loadPublications();
+    } finally {
+      setState(() {
+        _isLoadingMore = false;
+      });
+    }
+  }
+  
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _searchDebounce?.cancel();
+    super.dispose();
+  }
+  
+  Widget _buildLoadingIndicator() {
+    if (!_hasMore) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        child: Center(
+          child: Text(
+            'Aucune autre publication disponible',
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 14,
+            ),
+          ),
+        ),
+      );
+    }
+    
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: Center(
+        child: Column(
+          children: [
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryBlue),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Chargement de plus de publications...',
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -530,7 +633,10 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
-            onPressed: () => _loadPublications(refresh: true),
+            onPressed: () {
+              _resetPagination();
+              _loadPublications(refresh: true);
+            },
             tooltip: 'Rafraîchir',
           ),
         ],
@@ -538,8 +644,8 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
       body: Column(
         children: [
           Container(
-            margin: const EdgeInsets.all(16),
-            padding: const EdgeInsets.all(20),
+            margin: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
@@ -564,17 +670,58 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
                       hintText: 'Rechercher par titre...',
                       hintStyle: TextStyle(color: Colors.grey[600]),
                       prefixIcon: Icon(Icons.search, color: AppColors.primaryBlue, size: 20),
+                      suffixIcon: _search.isNotEmpty
+                          ? IconButton(
+                              icon: Icon(Icons.clear, color: Colors.grey[600]),
+                              onPressed: () {
+                                _onSearchChanged('');
+                              },
+                            )
+                          : null,
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     ),
                     style: const TextStyle(color: AppColors.primaryBlue, fontWeight: FontWeight.w500),
                     cursorColor: AppColors.primaryBlue,
-                    onChanged: (v) => setState(() => _search = v),
+                    onChanged: _onSearchChanged,
+                    controller: TextEditingController(text: _search),
                   ),
                 ),
-                const SizedBox(height: 16),
+                
+                // Search Status
+                if (_search.isNotEmpty)
+                  Container(
+                    margin: const EdgeInsets.only(top: 12, bottom: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryBlue.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppColors.primaryBlue.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.search,
+                          size: 16,
+                          color: AppColors.primaryBlue,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '${_publications.length} résultat${_publications.length != 1 ? 's' : ''} pour "$_search"',
+                          style: TextStyle(
+                            color: AppColors.primaryBlue,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                
+            //const SizedBox(height: 16),
                 // Date Filters
-                Row(
+                /* Row(
                   children: [
                     Expanded(
                       child: Container(
@@ -651,7 +798,7 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
                         ),
                       ),
                   ],
-                ),
+                ), */
               ],
             ),
           ),
@@ -738,17 +885,13 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
                               return false;
                             },
                             child: ListView.builder(
+                              controller: _scrollController,
                               padding: const EdgeInsets.symmetric(horizontal: 16),
                               itemCount: filtered.length + (_hasMore ? 1 : 0),
                               itemBuilder: (context, i) {
                                 // Si c'est le dernier élément et qu'on a plus de données à charger
                                 if (i >= filtered.length) {
-                                  return Container(
-                                    padding: const EdgeInsets.all(20),
-                                    child: Center(
-                                      child: CircularProgressIndicator(color: AppColors.primaryBlue),
-                                    ),
-                                  );
+                                  return _buildLoadingIndicator();
                                 }
                                 
                                 final pub = filtered[i];
@@ -910,11 +1053,73 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
                             ),
                           ),
           ),
+          
+          // Pagination Info
+          if (_publications.isNotEmpty)
+            _buildPaginationInfo(),
         ],
       ),
       bottomNavigationBar: AmbassadorBottomNav(
         currentIndex: 1,
         onTap: (index) => handleAmbassadorNav(context, 1, index),
+      ),
+    );
+  }
+  
+  // Méthode pour afficher les informations de pagination
+  Widget _buildPaginationInfo() {
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            'Page $_currentPage - $_totalCount publication${_totalCount != 1 ? 's' : ''}',
+            style: TextStyle(
+              color: Colors.grey[700],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          Row(
+            children: [
+              if (_currentPage > 1)
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _currentPage--;
+                      _publications = _publications.take((_currentPage - 1) * _pageSize).toList();
+                      _hasMore = true;
+                    });
+                  },
+                  child: Text(
+                    'Précédent',
+                    style: TextStyle(color: AppColors.primaryBlue),
+                  ),
+                ),
+              if (_currentPage > 1 && _hasMore) const SizedBox(width: 8),
+              if (_hasMore)
+                TextButton(
+                  onPressed: _loadMorePublications,
+                  child: Text(
+                    'Suivant',
+                    style: TextStyle(color: AppColors.primaryBlue),
+                  ),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }

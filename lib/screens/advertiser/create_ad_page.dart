@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:video_player/video_player.dart';
 
 class CreateAdPage extends StatefulWidget {
   const CreateAdPage({Key? key}) : super(key: key);
@@ -144,17 +145,34 @@ class _CreateAdPageState extends State<CreateAdPage> {
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryBlue,foregroundColor: Colors.white),
                       icon: const Icon(Icons.videocam,color: Colors.white,),
-                      label: const Text('Vidéo'),
+                      label: const Text('Vidéo(30s max)'),
                       onPressed: _mediaFile != null
                           ? null
                           : () async {
                               final picker = ImagePicker();
                               final picked = await picker.pickVideo(source: ImageSource.gallery);
                               if (picked != null) {
-                                setState(() {
-                                  _mediaFile = picked;
-                                  _mediaType = 'video';
-                                });
+                                final VideoPlayerController controller =
+                                    VideoPlayerController.file(File(picked.path));
+                                await controller.initialize();
+
+                                final Duration duration = controller.value.duration;
+                                controller.dispose();
+                                debugPrint('Vidéo sélectionnée: ${picked.path}, durée: ${duration.inSeconds}s');
+                                // Validation de la durée (exemple : max 30 secondes)
+                                if (duration.inSeconds <= 30) {
+                                        setState(() {
+                                        _mediaFile = picked;
+                                        _mediaType = 'video';
+                                      });
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: 
+                                    Text('Vidéo trop longue (${duration.inSeconds}s) ❌'),
+                                    backgroundColor: Colors.red,),
+                                  );
+                                }
+                                
                               }
                             },
                     ),

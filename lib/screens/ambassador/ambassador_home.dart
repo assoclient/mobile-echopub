@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:share_plus/share_plus.dart';
 import 'dart:io';
+import 'dart:async';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
@@ -24,6 +25,7 @@ class AmbassadorHome extends StatefulWidget {
 
 class _AmbassadorHomeState extends State<AmbassadorHome> {
   bool _isLoading = true;
+  bool _isLoadingMore = false;
   String? _error;
   List<Map<String, dynamic>> _campaigns = [];
   final Map<int, VideoPlayerController> _videoControllers = {};
@@ -36,6 +38,16 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
 
   int _bottomNavIndex = 0;
   String _search = '';
+  
+  // Pagination
+  int _currentPage = 1;
+  int _pageSize = 10;
+  bool _hasMoreData = true;
+  final ScrollController _scrollController = ScrollController();
+  
+  // Recherche avec debounce
+  Timer? _searchDebounce;
+  String _lastSearchQuery = '';
 
   // Debug flag - Set to false to use real API, true for test data
   static const bool is_debug = false;
@@ -44,6 +56,63 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
   void initState() {
     super.initState();
     _loadCampaigns();
+    _setupScrollListener();
+  }
+  
+  void _setupScrollListener() {
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+        if (!_isLoadingMore && _hasMoreData) {
+          _loadMoreCampaigns();
+        }
+      }
+    });
+  }
+  
+  void _onSearchChanged(String query) {
+    _search = query;
+    
+    // Annuler le timer précédent
+    _searchDebounce?.cancel();
+    
+    // Démarrer un nouveau timer
+    _searchDebounce = Timer(const Duration(milliseconds: 500), () {
+      if (_search != _lastSearchQuery) {
+        _lastSearchQuery = _search;
+        _resetPagination();
+        _loadCampaigns();
+      }
+    });
+  }
+  
+  void _resetPagination() {
+    setState(() {
+      _currentPage = 1;
+      _campaigns.clear();
+      _hasMoreData = true;
+    });
+  }
+  
+  Future<void> _loadMoreCampaigns() async {
+    if (_isLoadingMore || !_hasMoreData) return;
+    
+    setState(() {
+      _isLoadingMore = true;
+    });
+    
+    try {
+      if (is_debug) {
+        await _loadMoreDefaultCampaigns();
+      } else {
+        await _fetchMoreCampaignsFromAPI();
+      }
+    } catch (e) {
+      debugPrint('Erreur lors du chargement de plus de campagnes: $e');
+    } finally {
+      setState(() {
+        _isLoadingMore = false;
+      });
+    }
   }
 
   @override
@@ -51,6 +120,8 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
     for (final controller in _videoControllers.values) {
       controller.dispose();
     }
+    _scrollController.dispose();
+    _searchDebounce?.cancel();
     super.dispose();
   }
 
@@ -247,6 +318,60 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
       _campaigns = defaultCampaigns;
     });
   }
+  
+  Future<void> _loadMoreDefaultCampaigns() async {
+    // Simuler un délai de chargement
+    await Future.delayed(const Duration(milliseconds: 800));
+    
+    // Données supplémentaires pour la pagination (simulation)
+    final moreCampaigns = [
+      {
+        'id': '5',
+        'title': 'Campagne Supplémentaire 1',
+        'description': 'Description de la campagne supplémentaire pour tester la pagination.',
+        'media_url': 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=400&q=80',
+        'target_link': 'https://example.com/campaign1',
+        'expected_views': 150,
+        'expected_earnings': 750,
+        'cpv': 5.0,
+        'start_date': DateTime.now().subtract(const Duration(days: 1)),
+        'end_date': DateTime.now().add(const Duration(days: 5)),
+        'location_type': 'city',
+        'target_location': [{'value': 'Abidjan'}],
+        'advertiser': {
+          'name': 'Entreprise Test 1',
+          'logo': 'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=crop&w=400&q=80'
+        }
+      },
+      {
+        'id': '6',
+        'title': 'Campagne Supplémentaire 2',
+        'description': 'Autre campagne pour tester la pagination et le scroll infini.',
+        'media_url': 'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=crop&w=400&q=80',
+        'target_link': 'https://example.com/campaign2',
+        'expected_views': 200,
+        'expected_earnings': 1000,
+        'cpv': 5.0,
+        'start_date': DateTime.now(),
+        'end_date': DateTime.now().add(const Duration(days: 8)),
+        'location_type': 'city',
+        'target_location': [{'value': 'Yamoussoukro'}],
+        'advertiser': {
+          'name': 'Entreprise Test 2',
+          'logo': 'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=crop&w=400&q=80'
+        }
+      }
+    ];
+    
+    setState(() {
+      _campaigns.addAll(moreCampaigns);
+      _currentPage++;
+      // Simuler qu'il n'y a plus de données après la page 2
+      if (_currentPage >= 2) {
+        _hasMoreData = false;
+      }
+    });
+  }
 
   Future<void> _fetchCampaignsFromAPI() async {
     try {
@@ -258,7 +383,7 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
       final ambassadorId = user?['_id'];
       if (ambassadorId == null) throw Exception('Utilisateur non connecté');
       final apiUrl = dotenv.env['API_BASE_URL'] ?? 'http://localhost:5000';
-      final url = Uri.parse('$apiUrl/api/ambassador-campaigns/active-campaigns/');
+      final url = Uri.parse('$apiUrl/api/ambassador-campaigns/active-campaigns/?page=$_currentPage&limit=$_pageSize&search=$_search');
       final response = await http.get(url, headers: {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
@@ -300,6 +425,68 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
       });
     }
   }
+  
+  Future<void> _fetchMoreCampaignsFromAPI() async {
+    try {
+      final storage = const FlutterSecureStorage();
+      final token = await storage.read(key: 'auth_token');
+      final user = await AuthService.getUser();
+      final ambassadorId = user?['_id'];
+      
+      if (ambassadorId == null) throw Exception('Utilisateur non connecté');
+      
+      final apiUrl = dotenv.env['API_BASE_URL'] ?? 'http://localhost:5000';
+      final url = Uri.parse('$apiUrl/api/ambassador-campaigns/active-campaigns/?page=${_currentPage + 1}&limit=$_pageSize&search=$_search');
+      
+      final response = await http.get(url, headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      });
+      
+      if (response.statusCode == 200) {
+        final decoded = json.decode(response.body);
+        List<dynamic> dataList;
+        
+        if (decoded is Map && decoded.containsKey('data')) {
+          dataList = decoded['data'] as List<dynamic>;
+        } else if (decoded is List) {
+          dataList = decoded;
+        } else {
+          throw Exception('Format de réponse inattendu: ${response.body}');
+        }
+        
+        if (dataList.isNotEmpty) {
+          final newCampaigns = dataList.map<Map<String, dynamic>>((e) {
+            return {
+              ...e,
+              'start_date': e['start_date'] != null ? DateTime.tryParse(e['start_date']) : null,
+              'end_date': e['end_date'] != null ? DateTime.tryParse(e['end_date']) : null,
+            };
+          }).toList();
+          
+          setState(() {
+            _campaigns.addAll(newCampaigns);
+            _currentPage++;
+            _hasMoreData = dataList.length >= _pageSize;
+          });
+        } else {
+          setState(() {
+            _hasMoreData = false;
+          });
+        }
+      } else {
+        debugPrint('Erreur API lors du chargement de plus de campagnes: ${response.statusCode}');
+        setState(() {
+          _hasMoreData = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Erreur lors du chargement de plus de campagnes: $e');
+      setState(() {
+        _hasMoreData = false;
+      });
+    }
+  }
 
   Future<VideoPlayerController> _getVideoController(int index, String url) async {
     if (_videoControllers[index] != null) return _videoControllers[index]!;
@@ -307,6 +494,49 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
     await controller.initialize();
     _videoControllers[index] = controller;
     return controller;
+  }
+  
+  Widget _buildLoadingIndicator() {
+    if (!_hasMoreData) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        child: Center(
+          child: Text(
+            'Aucune autre campagne disponible',
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 14,
+            ),
+          ),
+        ),
+      );
+    }
+    
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: Center(
+        child: Column(
+          children: [
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryBlue),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Chargement de plus de campagnes...',
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -378,14 +608,54 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
                 hintText: 'Rechercher une campagne...',
                 hintStyle: TextStyle(color: Colors.grey[600]),
                 prefixIcon: Icon(Icons.search, color: AppColors.primaryBlue, size: 20),
+                suffixIcon: _search.isNotEmpty
+                    ? IconButton(
+                        icon: Icon(Icons.clear, color: Colors.grey[600]),
+                        onPressed: () {
+                          _onSearchChanged('');
+                        },
+                      )
+                    : null,
                 border: InputBorder.none,
                 contentPadding: const EdgeInsets.symmetric(vertical: 12),
               ),
               style: const TextStyle(color: AppColors.primaryBlue, fontWeight: FontWeight.w500),
               cursorColor: AppColors.primaryBlue,
-              onChanged: (v) => setState(() => _search = v),
-            ),
+              onChanged: _onSearchChanged,
+              controller: TextEditingController(text: _search),
+            ),                
           ),
+          
+          // Search Status
+          if (_search.isNotEmpty)
+            Container(
+              margin: const EdgeInsets.only(left: 16, right: 16, bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.primaryBlue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppColors.primaryBlue.withOpacity(0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.search,
+                    size: 16,
+                    color: AppColors.primaryBlue,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${filteredCampaigns.length} résultat${filteredCampaigns.length != 1 ? 's' : ''} pour "$_search"',
+                    style: TextStyle(
+                      color: AppColors.primaryBlue,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           Expanded(
             child: filteredCampaigns.isEmpty
                 ? Center(
@@ -410,9 +680,14 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
                     ),
                   )
                 : ListView.builder(
+                    controller: _scrollController,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: filteredCampaigns.length,
+                    itemCount: filteredCampaigns.length + (_hasMoreData ? 1 : 0),
                     itemBuilder: (context, i) {
+                      // Afficher l'indicateur de chargement en bas
+                      if (i == filteredCampaigns.length) {
+                        return _buildLoadingIndicator();
+                      }
                       final c = filteredCampaigns[i];
                       
                       final campaignId = c['id']?.toString() ?? c['_id']?.toString()??'';
@@ -746,11 +1021,7 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
                                             title: const Text('Choisir une source'),
                                             content: const Text('D\'où voulez-vous prendre la capture d\'écran ?'),
                                             actions: [
-                                              TextButton.icon(
-                                                onPressed: () => Navigator.pop(context, ImageSource.camera),
-                                                icon: const Icon(Icons.camera_alt),
-                                                label: const Text('Appareil photo'),
-                                              ),
+                                              
                                               TextButton.icon(
                                                 onPressed: () => Navigator.pop(context, ImageSource.gallery),
                                                 icon: const Icon(Icons.photo_library),
@@ -779,7 +1050,7 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
                                                     const Text('Voulez-vous envoyer cette preuve pour la campagne ?'),
                                                     const SizedBox(height: 16),
                                                     Container(
-                                                      height: 200,
+                                                      height: 250,
                                                       width: double.infinity,
                                                       decoration: BoxDecoration(
                                                         borderRadius: BorderRadius.circular(8),
@@ -789,7 +1060,7 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
                                                         borderRadius: BorderRadius.circular(8),
                                                         child: Image.file(
                                                           imageFile,
-                                                          fit: BoxFit.cover,
+                                                          fit: BoxFit.contain,
                                                         ),
                                                       ),
                                                     ),
@@ -850,6 +1121,7 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
                                         final title = c['title'] ?? '';
                                         final description = c['description'] ?? '';
                                         final mediaUrl = c['media_url'] ?? '';
+                                        final shortLink = c['shortLink'] ?? '';
                                         final link = c['target_link'] ?? '';
                                         String content = '\n$description';
                                         List<String> files = [];
@@ -880,7 +1152,9 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
                                           content += '\n$mediaUrl';
                                         }
                                         if (link.isNotEmpty) {
-                                          content += '\n$link';
+                                          final user = await AuthService.getUser();
+                                          final ambassadorId = user?['_id'];
+                                          content += '\n$shortLink/$ambassadorId';
                                         }
                                         if (files.isNotEmpty) {
                                           Share.shareXFiles(files.map((e) => XFile(e)).toList(), text: content, subject: title);
@@ -888,8 +1162,8 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
                                           Share.share(content, subject: title);
                                         }
                                       },
-                                      icon: const Icon(Icons.share, size: 18),
-                                      label: const Text('Partager'),
+                                      icon: const Icon(Icons.share, size: 18,color: Colors.white),
+                                      label: const Text('Publier'),
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: AppColors.primaryBlue,
                                         foregroundColor: Colors.white,
@@ -969,7 +1243,10 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
-            onPressed: _loadCampaigns,
+            onPressed: () {
+              _resetPagination();
+              _loadCampaigns();
+            },
             tooltip: 'Rafraîchir',
           ),
         ],
@@ -1006,6 +1283,66 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
               break;
           }
         },
+      ),
+    );
+  }
+  
+  // Méthode pour afficher les informations de pagination
+  Widget _buildPaginationInfo() {
+    if (_campaigns.isEmpty) return const SizedBox.shrink();
+    
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            'Page $_currentPage',
+            style: TextStyle(
+              color: Colors.grey[700],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          Row(
+            children: [
+              if (_currentPage > 1)
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _currentPage--;
+                      _campaigns = _campaigns.take((_currentPage - 1) * _pageSize).toList();
+                      _hasMoreData = true;
+                    });
+                  },
+                  child: Text(
+                    'Précédent',
+                    style: TextStyle(color: AppColors.primaryBlue),
+                  ),
+                ),
+              if (_currentPage > 1 && _hasMoreData) const SizedBox(width: 8),
+              if (_hasMoreData)
+                TextButton(
+                  onPressed: _loadMoreCampaigns,
+                  child: Text(
+                    'Suivant',
+                    style: TextStyle(color: AppColors.primaryBlue),
+                  ),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }

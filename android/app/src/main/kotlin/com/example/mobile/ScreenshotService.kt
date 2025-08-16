@@ -199,7 +199,7 @@ class ScreenshotService : Service() {
     
     private fun takeScreenshot() {
         Log.d(TAG, "Tentative de capture d'écran")
-        
+        showPendingOverlay()
         // Nettoyer les anciennes ressources avant de recommencer
         virtualDisplay?.release()
         imageReader?.close()
@@ -345,7 +345,53 @@ class ScreenshotService : Service() {
             Log.e(TAG, "Erreur lors de l'affichage de l'overlay: ${e.message}")
         }
     }
-    
+     @SuppressLint("InflateParams")
+    private fun showPendingOverlay() {
+        try {
+            val layoutInflater = LayoutInflater.from(this)
+            val successOverlay = layoutInflater.inflate(android.R.layout.simple_list_item_1, null)
+            
+            // Configuration du texte
+            val textView = successOverlay.findViewById<TextView>(android.R.id.text1)
+            textView.text = "⌛ Capture en cours !\nVeuillez patienter..."
+            textView.setTextColor(Color.WHITE)
+            textView.gravity = Gravity.CENTER
+            textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+            textView.setTypeface(null, Typeface.BOLD)
+            
+            // Configuration du fond
+            successOverlay.background = ContextCompat.getDrawable(this, android.R.drawable.dialog_holo_dark_frame)
+            successOverlay.setPadding(40, 40, 40, 40)
+            
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+                PixelFormat.TRANSLUCENT
+            )
+            
+            params.gravity = Gravity.CENTER
+            params.x = 0
+            params.y = -200 // Un peu vers le haut
+            
+            windowManager.addView(successOverlay, params)
+            
+            // Supprimer l'overlay après 3 secondes
+            Handler(Looper.getMainLooper()).postDelayed({
+                try {
+                    windowManager.removeView(successOverlay)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Erreur lors de la suppression de l'overlay: ${e.message}")
+                }
+            }, 3000)
+            
+            Log.d(TAG, "Overlay de succès affiché")
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Erreur lors de l'affichage de l'overlay: ${e.message}")
+        }
+    }
     private fun requestMediaProjection() {
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -448,7 +494,7 @@ class ScreenshotService : Service() {
         Log.d(TAG, "ImageReader: ${imageReader != null}")
         Log.d(TAG, "VirtualDisplay: ${virtualDisplay != null}")
         Log.d(TAG, "MediaProjection: ${mediaProjection != null}")
-        
+        showPendingOverlay();
         if (imageReader == null) {
             Log.e(TAG, "ImageReader est null!")
             sendEvent("error", null, "ImageReader non initialisé")

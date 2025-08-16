@@ -87,11 +87,11 @@ class _ScreenshotCaptureWidgetState extends State<ScreenshotCaptureWidget> {
         setState(() {
           _serviceState = ScreenshotServiceState.ready;
           _statusMessage = Platform.isAndroid 
-              ? 'Bouton flottant actif - Cliquez pour capturer'
+              ? 'Bouton flottant actif - Cliquez pour autoriser la capture'
               : 'En attente de capture d\'écran...';
         });
         break;
-
+      
       case ScreenshotEvent.screenshotTaken:
         setState(() {
           _serviceState = ScreenshotServiceState.capturing;
@@ -100,6 +100,7 @@ class _ScreenshotCaptureWidgetState extends State<ScreenshotCaptureWidget> {
               : 'Capture détectée - Importez l\'image (2 min max)';
           _isWaitingForScreenshot = true;
         });
+        
         
         if (Platform.isIOS) {
           _startTimeout();

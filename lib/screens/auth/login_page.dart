@@ -88,7 +88,20 @@ class _LoginPageState extends State<LoginPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text('Connexion', style: Theme.of(context).textTheme.headlineLarge),
+              Center(
+                  child: ClipRRect(
+                              borderRadius: BorderRadius.circular(20),
+                              child: Image.asset(
+                                'assets/logobg1.png',
+                                fit: BoxFit.cover,
+                                width: 200,
+                              ),
+                            )
+                ),
+               /*  Center(
+                  child: Text('Connexion', style: Theme.of(context).textTheme.headlineLarge),
+
+                ), */
               const SizedBox(height: 24),
               if (_error != null)
                 Padding(

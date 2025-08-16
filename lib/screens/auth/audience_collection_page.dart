@@ -185,7 +185,7 @@ class _AudienceCollectionPageState extends State<AudienceCollectionPage> {
         ...widget.registrationData,
         ...audienceStats,
       };
-
+      debugPrint("completeData: $completeData");
       // Appeler le callback si fourni (pour compatibilité)
       if (widget.onComplete != null) {
         widget.onComplete!(completeData);

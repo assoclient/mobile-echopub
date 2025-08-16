@@ -6,6 +6,7 @@ import 'screens/auth/register_page.dart';
 import 'screens/advertiser/advertiser_home.dart';
 import 'screens/ambassador/ambassador_home.dart';
 import 'screens/advertiser/advertiser_profile_page.dart';
+import 'screens/splash_screen.dart';
 import 'services/auth_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
@@ -20,13 +21,14 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Ambassadeur & Annonceur',
+      title: 'EchoPub',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
       ),
-      home: const AuthNavigator(),
+      home: const SplashScreen(),
       routes: {
+        '/login': (context) => const AuthNavigator(),
         '/advertiser': (context) => const AdvertiserHome(),
         '/ambassador': (context) => const AmbassadorHome(),
         '/advertiser/create-campaign': (context) => const CreateAdPage(),
