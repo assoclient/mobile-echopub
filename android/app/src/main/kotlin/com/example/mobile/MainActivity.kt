@@ -1,4 +1,4 @@
-package com.example.mobile
+package com.echopub.communications
 
 import android.app.Activity
 import android.content.Intent
@@ -14,8 +14,8 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity: FlutterActivity() {
     companion object {
-        private const val CHANNEL = "com.echopub.mobile/screenshot"
-        private const val EVENT_CHANNEL = "com.echopub.mobile/screenshot_events"
+        private const val CHANNEL = "com.echopub.communications/screenshot"
+        private const val EVENT_CHANNEL = "com.echopub.communications/screenshot_events"
         private const val REQUEST_CODE_SCREENSHOT = 1000
         private const val REQUEST_CODE_OVERLAY = 1001
         private const val TAG = "MainActivity"
@@ -165,7 +165,7 @@ class MainActivity: FlutterActivity() {
                     val mediaProjection = mediaProjectionManager.getMediaProjection(resultCode, data)
                     
                     // Stocker la MediaProjection dans le singleton
-                    com.example.mobile.MediaProjectionManager.setMediaProjection(mediaProjection)
+                    com.echopub.communications.MediaProjectionManager.setMediaProjection(mediaProjection)
                     
                     Log.d(TAG, "MediaProjection obtenue et stockée")
                     

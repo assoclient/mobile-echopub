@@ -4,8 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 
 class ScreenshotService {
-  static const MethodChannel _channel = MethodChannel('com.echopub.mobile/screenshot');
-  static const EventChannel _eventChannel = EventChannel('com.echopub.mobile/screenshot_events');
+  static const MethodChannel _channel = MethodChannel('com.echopub.communications/screenshot');
+  static const EventChannel _eventChannel = EventChannel('com.echopub.communications/screenshot_events');
   
   static Stream<Map<String, dynamic>>? _screenshotStream;
   static Timer? _timeoutTimer;
@@ -35,6 +35,7 @@ class ScreenshotService {
         
         // Démarrer le service avec bouton flottant
         final bool result = await _channel.invokeMethod('startFloatingButton');
+        //final bool requestPermission = await _channel.invokeMethod('requestMediaProjection');
         return result;
       } else if (Platform.isIOS) {
         // Démarrer l'écoute des notifications de screenshot

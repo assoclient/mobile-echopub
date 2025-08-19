@@ -7,7 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:mobile/services/auth_service.dart';
+import 'package:echopub/services/auth_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:convert';
 import '../../theme.dart';
@@ -41,7 +41,7 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
   
   // Pagination
   int _currentPage = 1;
-  int _pageSize = 10;
+  final int _pageSize = 10;
   bool _hasMoreData = true;
   final ScrollController _scrollController = ScrollController();
   
@@ -392,7 +392,7 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
         final decoded = json.decode(response.body);
         List<dynamic> dataList;
         if (decoded is Map && decoded.containsKey('data')) {
-          debugPrint('dataList: $decoded');
+         // debugPrint('dataList: $decoded');
           dataList = decoded['data'] as List<dynamic>;
         } else if (decoded is List) {
           dataList = decoded;
@@ -410,6 +410,7 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
               'end_date': e['end_date'] != null ? DateTime.tryParse(e['end_date']) : null,
             };
           }).toList();
+          _hasMoreData = dataList.length >= _pageSize;
         });
       } else {
         setState(() {
@@ -467,6 +468,7 @@ class _AmbassadorHomeState extends State<AmbassadorHome> {
           setState(() {
             _campaigns.addAll(newCampaigns);
             _currentPage++;
+            debugPrint('dataList: ${dataList.length} ${_pageSize}');
             _hasMoreData = dataList.length >= _pageSize;
           });
         } else {

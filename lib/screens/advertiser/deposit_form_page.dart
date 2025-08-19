@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:convert';
 
-import 'package:mobile/theme.dart';
+import 'package:echopub/theme.dart';
 
 class DepositFormPage extends StatefulWidget {
   final String userId;

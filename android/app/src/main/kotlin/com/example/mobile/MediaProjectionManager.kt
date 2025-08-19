@@ -1,4 +1,4 @@
-package com.example.mobile
+package com.echopub.communications
 
 import android.media.projection.MediaProjection
 

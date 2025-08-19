@@ -1025,6 +1025,7 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
                               Row(
                                 children: [
                                   Expanded(
+                                    
                                     child: _buildProofSection(
                                       title: 'Preuve 1',
                                       imageUrl: pub['capture1'],
@@ -1036,7 +1037,7 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: _buildProofSection(
-                                      title: 'Preuve 2',
+                                      title: 'Preuve 2(Après 12h)',
                                       imageUrl: pub['capture2'],
                                       onTap: () => _pickCapture(i, 2),
                                       isInitial: false,
@@ -1144,7 +1145,7 @@ class _AmbassadorPublicationsPageState extends State<AmbassadorPublicationsPage>
             title,
             style: TextStyle(
               fontWeight: FontWeight.w600,
-              fontSize: 14,
+              fontSize: 10,
               color: Colors.grey[700],
             ),
           ),

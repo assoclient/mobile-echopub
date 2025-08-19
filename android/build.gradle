@@ -3,11 +3,9 @@ buildscript {
         google()
         mavenCentral()
     }
-
-    dependencies {
-        classpath 'com.android.tools.build:gradle:8.4.1' // ✅ met à jour ici
-    }
 }
+
+
 
 allprojects {
     repositories {

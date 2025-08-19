@@ -1,5 +1,5 @@
-import 'package:mobile/screens/auth/login_page.dart';
-import 'package:mobile/services/auth_service.dart';
+import 'package:echopub/screens/auth/login_page.dart';
+import 'package:echopub/services/auth_service.dart';
 
 import '../../components/ambassador_bottom_nav.dart';
 import 'ambassador_nav_helper.dart';

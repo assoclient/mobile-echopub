@@ -4,7 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:convert';
 
-import 'package:mobile/theme.dart';
+import 'package:echopub/theme.dart';
 
 class AdDetailsPage extends StatefulWidget {
   final String campaignId;

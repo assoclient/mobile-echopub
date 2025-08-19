@@ -1,5 +1,5 @@
-name: mobile
-description: "A new Flutter project."
+name: echopub
+description: "Echo Pub Plateforme d'influence marketing sur Whatsapp."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -43,7 +43,7 @@ dependencies:
   video_player: ^2.8.1
   share_plus: ^7.2.1
   url_launcher: ^6.2.6
-  image_picker: ^1.0.7
+  image_picker: ^0.8.7+6
   flutter_contacts: ^1.1.7+1
   permission_handler: ^11.3.1
   exif: ^3.3.0

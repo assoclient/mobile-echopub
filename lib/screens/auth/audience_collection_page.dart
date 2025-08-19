@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
-import 'package:mobile/services/auth_service.dart';
+import 'package:echopub/services/auth_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -228,6 +228,7 @@ class _AudienceCollectionPageState extends State<AudienceCollectionPage> {
           }
         }
       } else {
+        debugPrint("Erreur API: ${response.body}");
         final errorData = jsonDecode(response.body);
         final errorMessage = errorData['message'] ?? 'Erreur lors de l\'inscription';
         
@@ -239,6 +240,7 @@ class _AudienceCollectionPageState extends State<AudienceCollectionPage> {
         );
       }
     } catch (e) {
+      debugPrint("Erreur lors de l'inscription: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Erreur de connexion: $e'),

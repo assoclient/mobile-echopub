@@ -1,4 +1,4 @@
-package com.example.mobile
+package com.echopub.communications
 
 import android.annotation.SuppressLint
 import android.app.*
@@ -103,7 +103,7 @@ class ScreenshotService : Service() {
             Log.d(TAG, "Bouton flottant déjà actif")
             return
         }
-        
+        requestMediaProjection()
         // Créer la notification persistante
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Capture d'Écran Active")
@@ -207,7 +207,7 @@ class ScreenshotService : Service() {
         imageReader = null
         
         // Récupérer la MediaProjection du singleton
-        mediaProjection = com.example.mobile.MediaProjectionManager.getMediaProjection()
+        mediaProjection = com.echopub.communications.MediaProjectionManager.getMediaProjection()
         
         if (mediaProjection == null) {
             Log.d(TAG, "MediaProjection non disponible, demande de permission")
@@ -257,7 +257,7 @@ class ScreenshotService : Service() {
         val notificationManager = getSystemService(NotificationManager::class.java)
         
         // Intent pour retourner à l'application
-        val intent = Intent(this, com.example.mobile.MainActivity::class.java).apply {
+        val intent = Intent(this, com.echopub.communications.MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
         val pendingIntent = PendingIntent.getActivity(
@@ -494,7 +494,7 @@ class ScreenshotService : Service() {
         Log.d(TAG, "ImageReader: ${imageReader != null}")
         Log.d(TAG, "VirtualDisplay: ${virtualDisplay != null}")
         Log.d(TAG, "MediaProjection: ${mediaProjection != null}")
-        showPendingOverlay();
+        //showPendingOverlay();
         if (imageReader == null) {
             Log.e(TAG, "ImageReader est null!")
             sendEvent("error", null, "ImageReader non initialisé")
@@ -639,7 +639,7 @@ class ScreenshotService : Service() {
             mediaProjection = null
             
             // Nettoyer le singleton aussi
-            com.example.mobile.MediaProjectionManager.clearMediaProjection()
+            com.echopub.communications.MediaProjectionManager.clearMediaProjection()
             
             stopForeground(true)
             isServiceRunning = false

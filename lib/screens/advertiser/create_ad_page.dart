@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:mobile/services/auth_service.dart';
-import 'package:mobile/theme.dart';
+import 'package:echopub/services/auth_service.dart';
+import 'package:echopub/theme.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'dart:convert';

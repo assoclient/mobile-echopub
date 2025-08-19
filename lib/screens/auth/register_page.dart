@@ -60,6 +60,7 @@ class _RegisterPageState extends State<RegisterPage> {
           }
         }
       } else {
+        debugPrint("Erreur API: ${response.body}");
         setState(() {
           _apiError = 'Erreur: ' + (jsonDecode(response.body)['message']?.toString() ?? 'Inconnue');
         });
@@ -354,7 +355,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   ] else ...[
                     // Rien à afficher (city, region, contacts cachés)
                   ],
-                    const SizedBox(height: 16),
+                  if(_role == 'ambassador') ... [const SizedBox(height: 16),
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -382,7 +383,7 @@ class _RegisterPageState extends State<RegisterPage> {
                           ),
                         ],
                       ),
-                    ),
+                    ),],
                     // GPS optionnel (à brancher sur une vraie géoloc si besoin)
                    // const SizedBox(height: 16),
                    

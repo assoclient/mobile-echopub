@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'dart:convert';
 
-import 'package:mobile/screens/auth/login_page.dart';
+import 'package:echopub/screens/auth/login_page.dart';
 
 class AuthService {
   static const _storage = FlutterSecureStorage();

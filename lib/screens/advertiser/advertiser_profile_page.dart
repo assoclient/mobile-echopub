@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:mobile/components/advertiser_bottom_nav.dart';
-import 'package:mobile/components/custom_bottom_nav_bar.dart';
-import 'package:mobile/screens/advertiser/advertiser_home.dart';
-import 'package:mobile/screens/advertiser/advertiser_nav_helper.dart';
-import 'package:mobile/screens/auth/login_page.dart';
-import 'package:mobile/services/auth_service.dart';
+import 'package:echopub/components/advertiser_bottom_nav.dart';
+import 'package:echopub/components/custom_bottom_nav_bar.dart';
+import 'package:echopub/screens/advertiser/advertiser_home.dart';
+import 'package:echopub/screens/advertiser/advertiser_nav_helper.dart';
+import 'package:echopub/screens/auth/login_page.dart';
+import 'package:echopub/services/auth_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:mobile/theme.dart';
+import 'package:echopub/theme.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 

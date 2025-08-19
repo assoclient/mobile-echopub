@@ -1,8 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:mobile/screens/advertiser/advertiser_home.dart';
-import 'package:mobile/services/auth_service.dart';
+import 'package:echopub/screens/advertiser/advertiser_home.dart';
+import 'package:echopub/services/auth_service.dart';
 import '../../theme.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -23,8 +23,67 @@ class _LoginPageState extends State<LoginPage> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   String? _error;
+  String? _emailError;
+  bool _isEmailValid = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController.addListener(_validateEmail);
+  }
+
+  @override
+  void dispose() {
+    _emailController.removeListener(_validateEmail);
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  void _validateEmail() {
+    final email = _emailController.text.trim();
+    debugPrint('Email: $email');
+    debugPrint('Is Phone Valid: ${_isPhoneValid(email)}');
+    debugPrint('Is Email Valid: ${_isValidEmail(email)}');
+    setState(() {
+      if (email.isEmpty) {
+        _emailError = null;
+        _isEmailValid = false;
+      } else if (!_isValidEmail(email) && !_isPhoneValid(email)) {
+        _emailError = 'Veuillez entrer une adresse email ou un numéro valide';
+        _isEmailValid = false;
+      } else {
+        _emailError = null;
+        _isEmailValid = true;
+      }
+    });
+  }
+bool _isPhoneValid(String phone) {
+  final phoneRegex = RegExp(r'^6[0-9]{8}$');
+  return phoneRegex.hasMatch(phone);
+}
+  bool _isValidEmail(String email) {
+    // Basic email validation regex
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    return emailRegex.hasMatch(email);
+  }
+
+  bool _canSubmit() {
+    
+    return _emailController.text.trim().isNotEmpty && 
+           _passwordController.text.isNotEmpty && 
+           _isEmailValid;
+  }
 
   Future<void> _login() async {
+    // Validate before proceeding
+    if (!_canSubmit()) {
+      setState(() {
+        _error = 'Veuillez remplir tous les champs correctement';
+      });
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _error = null;
@@ -61,7 +120,7 @@ class _LoginPageState extends State<LoginPage> {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Rôle non supporté.')));
         }
       } else {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const AdvertiserHome()));
+        ///Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const AdvertiserHome()));
         setState(() {
           _error = 'Email ou mot de passe incorrect';
         });
@@ -111,25 +170,50 @@ class _LoginPageState extends State<LoginPage> {
               TextField(
                 controller: _emailController,
                 decoration: InputDecoration(
-                  labelText: 'Email',
+                  labelText: 'Email/Whatsapp',
                   prefixIcon: Icon(Icons.email, color: AppColors.primaryBlue),
+                  errorText: _emailError,
+                  /* border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(
+                      color: _emailError != null ? Colors.red : Colors.grey,
+                    ),
+                  ), */
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(
+                      color: _emailError != null ? Colors.red : AppColors.primaryBlue,
+                    ),
+                  ),
                 ),
                 keyboardType: TextInputType.emailAddress,
+                onChanged: (_) => _validateEmail(),
               ),
               const SizedBox(height: 16),
               TextField(
                 controller: _passwordController,
                 obscureText: true,
+                onChanged: (_) => _validateEmail(),
                 decoration: InputDecoration(
                   labelText: 'Mot de passe',
                   prefixIcon: Icon(Icons.lock, color: AppColors.primaryBlue),
+                  
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: AppColors.primaryBlue),
+                  ),
                 ),
               ),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _isLoading ? null : _login,
+                  onPressed: _canSubmit() && !_isLoading ? _login : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _canSubmit() ? AppColors.primaryBlue : Colors.grey,
+                    foregroundColor: Colors.white,
+                   
+                  ),
                   child: _isLoading
                       ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                       : const Text('Se connecter'),

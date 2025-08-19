@@ -1,16 +1,16 @@
   import 'package:flutter/material.dart';
-import 'package:mobile/components/advertiser_bottom_nav.dart';
-import 'package:mobile/screens/advertiser/advertiser_dashboard.dart';
-import 'package:mobile/screens/advertiser/advertiser_nav_helper.dart';
-import 'package:mobile/screens/advertiser/advertiser_profile_page.dart';
-import 'package:mobile/services/auth_service.dart';
+import 'package:echopub/components/advertiser_bottom_nav.dart';
+import 'package:echopub/screens/advertiser/advertiser_dashboard.dart';
+import 'package:echopub/screens/advertiser/advertiser_nav_helper.dart';
+import 'package:echopub/screens/advertiser/advertiser_profile_page.dart';
+import 'package:echopub/services/auth_service.dart';
 import 'package:video_player/video_player.dart';
-import 'package:mobile/theme.dart';
-import 'package:mobile/components/custom_bottom_nav_bar.dart';
-import 'package:mobile/screens/advertiser/create_ad_page.dart';
-import 'package:mobile/screens/advertiser/edit_ad_page.dart';
-import 'package:mobile/screens/advertiser/deposit_form_page.dart';
-import 'package:mobile/screens/advertiser/ad_details_page.dart';
+import 'package:echopub/theme.dart';
+import 'package:echopub/components/custom_bottom_nav_bar.dart';
+import 'package:echopub/screens/advertiser/create_ad_page.dart';
+import 'package:echopub/screens/advertiser/edit_ad_page.dart';
+import 'package:echopub/screens/advertiser/deposit_form_page.dart';
+import 'package:echopub/screens/advertiser/ad_details_page.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -406,7 +406,7 @@ class _AdvertiserHomeState extends State<AdvertiserHome> {
                         }
                       },
                     );
-                  } else if (url.startsWith('http') && (url.endsWith('.jpg') || url.endsWith('.jpeg') || url.endsWith('.png') || url.endsWith('.webp'))) {
+                  } else if ((url.startsWith('http')||url.startsWith('https')) && (url.endsWith('.jpg') || url.endsWith('.jpeg') || url.endsWith('.png') || url.endsWith('.webp'))) {
                     return ClipRRect(
                       borderRadius: BorderRadius.circular(8),
                       child: Image.network(
